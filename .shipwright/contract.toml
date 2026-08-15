@@ -1,0 +1,121 @@
+# =============================================================================
+# subtitle-studio — local-first transcription / diarization / subtitle pipeline
+# =============================================================================
+# THE STRICTEST CONTRACT IN THE QUEUE.
+#
+# Public repository, real software, and — uniquely among the enrolled repos —
+# it PROCESSES OTHER PEOPLE'S MEDIA. A run here can leak three different kinds
+# of thing, and each gets its own defence:
+#
+#   1. A Hugging Face token. Diarization needs one; it lives in .env, which is
+#      gitignored, and `.env*` is on never_commit as a second line.
+#   2. Someone's video, audio, or transcript. Every job writes a `<name>.studio/`
+#      directory of intermediates that contains the full transcript of whatever
+#      was processed. Gitignored, and on never_commit as well.
+#   3. A behaviour change nobody reviewed. `src/**` is on require_pr.
+#
+# Belt and braces on 1 and 2 is deliberate: .gitignore is one `git add -f` away
+# from being bypassed, and never_commit ABORTS the run instead of quietly
+# unstaging — so the two mechanisms fail differently.
+#
+# Fingerprinted. Edit this and shipwright refuses to run until:
+#     shipwright approve subtitle-studio
+# =============================================================================
+
+schema = 1
+
+[repo]
+name = "subtitle-studio"
+default_branch = "main"
+remote = "origin"
+hot_window_min = 10
+
+[commit]
+types = ["feat", "fix", "refactor", "perf", "docs", "test", "build", "chore"]
+scope_required = false
+
+# Match the package layout so a slot yields readable, themed commits.
+scopes = ["asr", "stages", "subtitles", "translate", "tui", "tests", "fonts", "docs"]
+split_by_scope = true
+
+# Low. The whole publishable tree is 62 files; a slot proposing more than 30 is
+# not incremental work and should wait for a human.
+max_files = 30
+
+trailer = true
+
+[flow]
+mode = "direct"
+branch_prefix = "auto/"
+pr_draft = false
+pr_reviewers = []
+restore_branch = true
+
+[gates]
+# Nothing is published unless the suite is green. The real output becomes the
+# `Gates:` line, so a commit cannot claim tests that did not run.
+pre_commit = ["uv run ruff check src tests"]
+pre_push   = ["uv run pytest -q"]
+
+# Generous: a cold uv sync can be slow, and the alternative is a false failure.
+timeout_s = 900
+
+[tag]
+# pyproject declares 0.1.0. Enable this when there is a release process; it
+# reacts to a version you already bumped, it never invents one.
+enabled = false
+when = "never"
+manifest = "pyproject.toml"
+pattern = "v{version}"
+
+[paths]
+# The mandatory 13-pattern floor is unioned in. Everything below is IN ADDITION
+# and specific to what this program handles.
+never_commit = [
+  # 1. The token. .gitignore covers these too; this makes a bypass fail loudly.
+  ".env",
+  ".env.*",
+  "config.toml",
+
+  # 2. Other people's content and everything derived from it. A .studio/
+  #    directory holds the complete transcript of the media it processed.
+  "*.studio/**",
+  "examples/*.mkv",
+  "examples/*.mp4",
+  "examples/*.mov",
+  "examples/*.wav",
+  "examples/*.mp3",
+  "examples/*.srt",
+  "examples/*.ass",
+
+  # 3. Model weights. Gigabytes, redistributable only sometimes, and always
+  #    reproducible from the cache.
+  "*.bin",
+  "*.safetensors",
+  "*.ct2",
+  "models/**",
+
+  # 4. Environment and build output.
+  ".venv/**",
+  "__pycache__/**",
+  ".pytest_cache/**",
+  ".ruff_cache/**",
+  "*.egg-info/**",
+]
+
+# Source changes behaviour; behaviour on a public repo gets a diff someone
+# looked at. Docs, styles and fonts still push directly.
+require_pr = ["src/**", "pyproject.toml", ".github/**"]
+
+[repair]
+process = true
+
+# OFF, as with kyo-recording-automation. A conflict in working source is a
+# decision about program behaviour. A failed run waiting for you beats a
+# resolution you did not make.
+conflicts = false
+max_attempts = 2
+
+[schedule]
+slots = ["03:00", "06:00", "09:00", "11:00", "13:00", "15:00", "18:00", "21:00", "23:00"]
+min_interval_min = 0

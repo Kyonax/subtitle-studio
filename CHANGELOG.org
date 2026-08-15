@@ -1,0 +1,35 @@
+#+TITLE: subtitle-studio — CHANGELOG
+
+Dated feature history, newest first. One line per change, current truth lives
+in =STUDIO.doc.org=, rulings in =STUDIO.ai.org=.
+
+* 2026-08-09
+
+- TUI :: pixel-protocol probe moved to import time (before Textual owns the tty), ghostty/kitty render TRUE pixels inline now; =z= toggles fit ↔ FULL SIZE (original image, scrollable pane opening on the subtitle anchor); edit modal fixed, input text visible, nano buttons.
+- TUI :: auto watch window, terminals without pixel graphics get the full-quality imv preview opened automatically on the first render (headless-safe, once per session).
+- TUI :: v6 polish, stage rows truly column-aligned (left-justified buttons), options + ▶ run pipeline on one action line, titled log panel, =?= help card (aligned key rows), =w= watch window: imv opened on a live-mirrored PNG and refreshed via imv-msg on every preview, REAL full quality on Alacritty; Textual markup whitespace-eating worked around.
+- TUI :: nano-core edition, hairline #2a2a2a panels + layered surfaces + monochrome accent + ok/warn/danger status ramp (the dashboard tokens); preview zoom =z= (fit/2x/3x centered on the subtitle anchor) + =shift+arrows= panning, aspect always kept.
+- TUI :: crash + clarity fixes, every subprocess stdin detached (ffmpeg inside the TUI stole the terminal stdin, BlockingIOError), preview image fits its pane and =o= opens the PNG full size, stages numbered 1-4 with a live "next ▸" guidance line.
+- TUI :: v2 HUD in the Kyonax Book palette (yellow #F9CD26 on black, state colors), three tabs, Speakers tab removed (rename via =r=), PIPELINE rows carry plain-words stage explanations + status badges + RUN FULL PIPELINE, STYLE tab is preset/position selection with LIVE preview (debounced re-render on selection, styles.toml mtime watcher, EDIT FILE button).
+- STYLE :: =preview= command + TUI fallback, one complete subtitle with sample text over a neutral backdrop, no video needed; =stroke.enabled= added (owner file edit revealed the missing toggle); reference test now checks nested keys.
+- STYLE :: =[meta]= gains =default_preset= (preset applied when none is passed); styles.toml carries a commented preset + speaker example.
+- STYLE :: the central =styles.toml= rewritten as THE reference, one commented =[default]= with every supported key and an explicit =[meta]=, presets removed (added by the user, README carries paste-ready examples).
+- STYLE :: the canonical =styles.toml= moved INTO the project root, commands and the TUI reference its presets by name; resolver order explicit → per-video → project → user config → defaults; new =styles= command shows the resolved file and preset table; the TUI Style tab displays which file it edits.
+- MOVE :: project relocated to ="/run/media/kyonax/Da_ Disk/dev/github-kyonax/subtitle-studio"=.
+
+* 2026-08-08
+
+- DOCS :: documentation system landed, =STUDIO.doc.org= + =STUDIO.ai.org= twin files, README rewritten as the practical guide, this changelog.
+- STYLE :: styling v2, rounded drawn backgrounds sized from real font metrics, glow layer, shadow, letter spacing, X/Y scale, uppercase, =max_words=, =padding {x,y}=.
+- STYLE :: named =[style.NAME]= presets in one styles.toml, =--preset= on style/run and a TUI dropdown; shipped presets rounded · neon · clean · shorts.
+- STYLE :: position moved out of the TOML, =--position anchor|'x,y'= on CLI and a TUI dropdown.
+- LANG :: swap mode, a two-language video crossed so each part is subtitled in the other language (=swap= track).
+- LANG :: per-segment language identification (fasttext lid.176), =languages= report, TUI lang column.
+- LANG :: unify translation is passthrough-aware, segments already in the target keep text and word timing.
+- MT :: MADLAD short-sentence doubling collapsed by post-processing.
+- VERIFIED :: full pipeline on the owner's real 76.5 s mixed EN/ES OBS recording, frames checked for every mode and preset.
+
+* 2026-08-07
+
+- CORE :: project born, phases 0 to 6 in one session: extract, WhisperX large-v3 transcription with word timestamps, pyannote diarization (code ready, gated), MADLAD-400 offline translation, ASS styling, NVENC burn-in, hash-skip =run= orchestrator, Textual TUI.
+- DECISIONS :: local GPU only, accuracy first, diarize then rename, ASS sidecar always with optional burn-in, TOML config, uv + Python 3.12.

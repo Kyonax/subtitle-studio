@@ -1,0 +1,102 @@
+#+TITLE: subtitle-studio — AI OPERATING RECIPES
+
+The detailed twin of =STUDIO.doc.org=: how an agent DRIVES, VERIFIES and
+EXTENDS this tool. Humans read the doc file and =README.md=; this file carries
+the DETAIL, exact values, commands and pitfalls, plus the dated rulings record.
+
+* DRIVE
+
+Always through uv from the project root (system Python is 3.14 and has no ML
+wheels, the venv is pinned 3.12):
+
+#+begin_example
+cd "/run/media/kyonax/Da_ Disk/dev/github-kyonax/subtitle-studio"
+uv run subtitle-studio <command> ...
+#+end_example
+
+| Command | Shape |
+|---------+-------|
+| extract    | =extract INPUT [--out DIR]= |
+| transcribe | =transcribe INPUT [--language auto\|es\|en] [--model M] [--batch N]= |
+| languages  | =languages INPUT= |
+| diarize    | =diarize INPUT [--min-speakers N] [--max-speakers N]= |
+| speakers   | =speakers list INPUT= · =speakers rename INPUT SPEAKER_00 "Name"= |
+| translate  | =translate INPUT (--to LANG \| --swap) [--all] [--device cuda\|cpu]= |
+| styles     | =styles [INPUT] [--styles F]= (resolved file + preset table) |
+| preview    | =preview [--preset N] [--position P] [--text T] [--res WxH] [--out PNG] [--open]= (style on sample text, no video) |
+| style      | =style INPUT [--lang TRACK] [--styles F] [--preset NAME] [--position P]= |
+| render     | =render INPUT [--lang TRACK] [--codec C] [--cq N]= |
+| run        | =run INPUT [--to LANG \| --swap] [--burn] [--preset NAME] [--position P] [--no-diarize] [--force STAGE]= |
+| models     | =models [asr\|diarize\|translate\|all]= |
+| ui         | =ui [INPUT]= |
+
+Track names: source language code (=en=, =es=), translated codes, or =swap=.
+Position values: the nine anchors (=bottom-center= etc.) or ='x,y'= in PlayRes
+space. Artifacts land in =<input>.studio/= next to the media, =--out= overrides.
+
+* MODELS & CACHES
+
+| Piece | Exact source | Size | Cache |
+|-------+--------------+------+-------|
+| ASR | =large-v3= CT2 via faster-whisper | 3.1 GB | HF cache |
+| Align EN | =WAV2VEC2_ASR_LARGE_LV60K_960H= | 1.2 GB | torch/HF |
+| Align ES | =jonatasgrosman/wav2vec2-large-xlsr-53-spanish= | 1.2 GB | HF cache |
+| Diarize | =pyannote/speaker-diarization-3.1= | 100 MB | HF cache, GATED |
+| Translate | =Nextcloud-AI/madlad400-3b-mt-ct2-int8= | 3 GB | =~/.cache/subtitle-studio/models/= |
+| Lang-id | fasttext =lid.176.ftz= | <1 MB | =~/.cache/subtitle-studio/models/= |
+
+Pyannote gating, one-time and free: HF account, accept terms on BOTH
+=pyannote/speaker-diarization-3.1= and =pyannote/segmentation-3.0=, then
+=export HF_TOKEN=hf_...= or =[auth] hf_token= in
+=~/.config/subtitle-studio/config.toml=. Without the token, =diarize= exits
+with the exact setup instructions and =models diarize= skips gracefully.
+
+* VRAM LAW
+
+6 GB ceiling (GTX 1660 SUPER). Models load strictly one at a time through
+=gpu.gpu_model()=, which deletes and empties the CUDA cache on exit. Budgets:
+whisper int8_float16 batch 8 ≈ 3.5 GB (auto-halves to 4 then 2 on CUDA OOM via
+=with_oom_backoff=), alignment ≈ 1.5 GB, pyannote ≈ 2 GB, MADLAD int8_float16
+≈ 3.3 GB. Every stage accepts CPU fallback, MADLAD via =--device cpu=.
+
+* STYLE ENGINE EXACTS
+
+- File resolution :: =--styles PATH= → =<video dir>/styles.toml= → =<project root>/styles.toml= (THE central file) → =~/.config/subtitle-studio/styles.toml= → built-in defaults (=stages.style.resolve_styles_path=; project root found by walking up to =pyproject.toml=).
+- Resolution order :: =[default]= ← =[style.<preset>]= ← =[speaker.<key>]=, key is stable id or display name, id wins.
+- Meta keys :: =play_res= ("video" or =[w, h]=) and =default_preset= (applied when no =--preset= is passed, resolved in =run_style=).
+- Square box :: BorderStyle=4, =Outline= carries =padding.x=, glyph outline forced fully transparent or every glyph halos (found by frame inspection 2026-08-08).
+- Rounded box :: NOT libass native. Layer-0 ={\p1}= rounded-rect drawing (bezier corners), sized from real glyph advances (=fonts.measure_line=, hmtx/upem, cached) plus =padding {x,y}=, so the text keeps its true stroke (BorderStyle=1). Requires a resolvable font file, otherwise a 0.52 em average estimate.
+- Glow :: layer-1 copy of the text, =\bord stroke.width+glow.size=, =\3c= glow color, =\1a&HFF&= transparent fill, =\blur radius=. Layer-2 is the crisp text.
+- Layered events pin with explicit =\pos= so libass collision handling never separates layers; overlap stacking shifts y by the previous block height.
+- Colors :: config =#RRGGBB[AA]= to ASS =&HAABBGGRR=, ASS alpha INVERTED (=00= opaque). Inline tags use =&HBBGGRR&= without alpha.
+- Freshness :: the style stage hash includes transcript, styles.toml, preset and position, so changing any re-runs exactly style and render.
+
+* PITFALLS
+
+- MADLAD-3B doubles short outputs ('Exactly. Exactly.'). Decoding params do NOT fix it, =collapse_repetition()= post-processing does (difflib halves ratio > 0.85 + consecutive duplicate sentences). Source text always survives in =source_text=.
+- Mixed-language videos align word timestamps with the file-level language's wav2vec2 model, the other language's word timing is slightly looser.
+- Language detection on short segments is unreliable, below 0.55 confidence or 2 words the segment inherits the file-level language (=langid.MIN_CONFIDENCE=).
+- ffmpeg filtergraph paths need escaping (=render.escape_filter_path=), covers =' : , ; [ ]= and backslash. Real-world OBS filenames contain spaces.
+- WhisperX pins torch tightly. The hedge: =[asr] engine = "faster-whisper"= switches engines without touching downstream stages.
+- =--swap= requires exactly two detected languages, otherwise instruct =--to=.
+
+* VERIFICATION
+
+Gates for any change, in order:
+
+1. =uv run pytest= green (47 tests, no models needed).
+2. =uv run subtitle-studio run examples/sample.mkv --no-diarize --burn= then re-run, second pass must print skips for extract and transcribe.
+3. Frame check on any styling change: =ffmpeg -ss T -i render.<track>.mp4 -frames:v 1 f.png= and LOOK at it (halo bug class is invisible in the .ass text).
+4. VRAM on ASR/translate changes: =nvidia-smi --query-gpu=memory.used --format=csv -lms 500= while running, peak stays under 6 GB.
+
+* CURRENT RULINGS
+
+Full narratives live in the owner's brain session node =Session Subtitle
+Studio= (=subtitle-studio= key), never in repo files.
+
+- =2026-08-08= STYLE :: position is a live choice (CLI/TUI), never styles.toml; presets are =[style.NAME]= tables in the same file.
+- =2026-08-08= STYLE :: rounded backgrounds are drawn layers with real font metrics, square stays BorderStyle=4.
+- =2026-08-08= LANG :: three modes locked, verbatim · unify (passthrough-aware) · swap (exactly two languages, =swap= track).
+- =2026-08-08= MT :: MADLAD repetition handled by post-processing collapse, not decoding params.
+- =2026-08-07= MT :: MADLAD-400-3B chosen for translation, NLLB rejected on CC-BY-NC license.
+- =2026-08-07= CORE :: local GPU only, no paid services; WhisperX large-v3 for accuracy; diarize-then-rename for voices; ASS sidecar always, burn-in optional.

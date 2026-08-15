@@ -1,0 +1,59 @@
+# ---------------------------------------------------------------------------
+# SECRETS — never commit. This repo is public.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+config.toml
+*.key
+*.pem
+
+# ---------------------------------------------------------------------------
+# Python environment and build output
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.bak
+
+# ---------------------------------------------------------------------------
+# Per-job pipeline artifacts
+# ---------------------------------------------------------------------------
+# Every run writes a <name>.studio/ directory of intermediates: audio splits,
+# ASR json, diarization rttm, render logs. Reproducible, large, and often
+# contains the transcript of whatever you were processing.
+*.studio/
+
+# ---------------------------------------------------------------------------
+# Local media
+# ---------------------------------------------------------------------------
+# Source video and audio dropped in for testing. These are other people's
+# content as often as not, and they are large.
+examples/*.mkv
+examples/*.mp4
+examples/*.mov
+examples/*.wav
+examples/*.mp3
+examples/*.srt
+examples/*.ass
+
+# Model weights, if anything ever caches them in-tree.
+*.bin
+*.safetensors
+*.ct2
+models/
+
+# ---------------------------------------------------------------------------
+# OS and editor noise
+# ---------------------------------------------------------------------------
+.DS_Store
+.#*
+*.swp

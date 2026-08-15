@@ -1,0 +1,116 @@
+#+TITLE: subtitle-studio — TOOL FILE
+
+The human twin of =STUDIO.ai.org=: what this tool IS, current truth only.
+How to run it step by step lives in =README.md=; exact agent recipes, values
+and dated rulings live in =STUDIO.ai.org=. Sections here are machine-addressable
+by heading path, the headings are the outline.
+
+* IDENTITY
+
+| Name    | =subtitle-studio=                                  |
+| Root    | ="/run/media/kyonax/Da_ Disk/dev/github-kyonax/subtitle-studio"=                       |
+| Kind    | Local-first CLI + TUI pipeline, Python 3.12 (uv)   |
+| Domain  | Video and audio to styled, translatable subtitles  |
+| Status  | Working end to end, verified on real footage       |
+| Pending | Speaker identification needs the owner's HF token  |
+
+Everything runs on the owner's machine, no cloud calls and no paid services.
+The one gated piece is pyannote diarization, unlocked by a free HuggingFace
+account once, see =STUDIO.ai.org= → MODELS & CACHES.
+
+* ARCHITECTURE
+
+** The folder
+
+#+begin_example
+subtitle-studio/
+│
+├── pyproject.toml            Project + deps (uv), extras: asr · translate · tui
+├── README.md                 The practical guide, commands, TUI, styles.toml
+├── STUDIO.doc.org            THIS file, the tool's current truth
+├── STUDIO.ai.org             Agent operating recipes and dated rulings
+├── CHANGELOG.org             Dated feature history, newest first
+├── config.example.toml       Main config template (models, devices, render)
+├── styles.toml               THE central styling config, a commented full reference
+├── fonts/                    User-dropped .ttf/.otf, matched by family name
+├── examples/
+│   └── sample.mkv            Two-voice ES test clip (regenerable, gitignored)
+├── src/subtitle_studio/
+│   ├── cli.py                Typer command surface, one thin command per stage
+│   ├── pipeline.py           The run orchestrator, hash-skip resume logic
+│   ├── schema.py             Transcript JSON contract v1, atomic writes
+│   ├── config.py             Settings loader, ~/.config/subtitle-studio
+│   ├── state.py              Per-stage input hashes, staleness, invalidation
+│   ├── gpu.py                VRAM law: sequential model load, OOM backoff
+│   ├── langid.py             Per-segment language detection (fasttext lid)
+│   ├── speakers.py           Speaker list and rename across all variants
+│   ├── asr/                  Engines: whisperx (default) · faster-whisper
+│   ├── stages/               extract · transcribe · diarize · translate · style · render
+│   ├── translate/            Provider protocol + MADLAD-400 CT2 provider
+│   ├── subtitles/            styleconf · fonts · layout · colors · ass_builder
+│   └── tui/                  Textual app, four tabs over the same stages
+└── tests/                    47 unit tests, no models needed
+#+end_example
+
+** The pipeline model
+
+Every stage reads and writes files in a per-job =<input>.studio/= directory, so
+each stage runs alone, resumes cheaply and never repeats fresh work.
+
+| Stage      | Reads                     | Writes                    |
+|------------+---------------------------+---------------------------|
+| extract    | the media file            | =audio.wav= (16 kHz mono) |
+| transcribe | =audio.wav=               | =transcript.json=         |
+| diarize    | audio + transcript        | =transcript.json=         |
+| translate  | =transcript.json=         | =transcript.<track>.json= |
+| style      | transcript + styles.toml  | =subs.<track>.ass=        |
+| render     | media + =subs.<track>.ass= | =render.<track>.mp4=     |
+
+=transcript.json= is the single contract: segments with start, end, text,
+per-word timestamps, per-segment language and speaker, plus a speakers map
+whose =SPEAKER_XX= ids are stable forever, renaming only fills a display name.
+=state.json= records each stage's input hashes, =run= skips stages whose inputs
+did not change and =--force STAGE= invalidates from a stage onward.
+
+* USAGE
+
+** Inputs
+
+Any local video or audio file ffmpeg can read. No URLs, no uploads.
+
+** The three language modes
+
+| Mode     | Ask                    | Subtitle track                          |
+|----------+------------------------+-----------------------------------------|
+| verbatim | style with no translate | matches the spoken language everywhere |
+| unify    | =translate --to LANG=  | one language, native parts untouched    |
+| swap     | =translate --swap=     | each part shown in the other language   |
+
+Every segment carries its own detected language, so a bilingual video unifies
+by translating only the foreign parts (word timing survives on the untouched
+ones) and swaps by crossing exactly two detected languages.
+
+** Styling
+
+All looks live in ONE central =styles.toml= at the project root: base
+=[default]=, named =[style.NAME]= presets and =[speaker.KEY]= overrides,
+resolved in that order and referenced by name (=--preset=, TUI dropdown, the
+=styles= command lists them). A =styles.toml= next to a video overrides the
+central file for that video only. Position is a live choice at style time
+(=--position= or the TUI dropdown), never config. Rounded backgrounds and glow
+are drawn by the tool itself, sized from the real font's glyph metrics, so they
+fit the text exactly.
+
+* TIES
+
+- FFMPEG :: extraction, probing, burn-in render (NVENC), one-frame previews.
+- MODEL CACHES :: HuggingFace cache for ASR and diarization, =~/.cache/subtitle-studio/models/= for MADLAD and the language-id model.
+- FONTS :: =fonts/= feeds both libass rendering and box measurement.
+- BRAIN :: the build record and rulings narrative live in the owner's session node =Session Subtitle Studio=.
+
+* EVIDENCE
+
+- Synthesized two-voice Spanish and English clips transcribed word-perfect with clean monotonic word timestamps.
+- The owner's real 76.5 s mixed EN/ES recording: accurate transcription across the mid-video language switch, unify and swap tracks rendered and frame-verified.
+- Peak GPU memory observed 4.8 GB of the 6 GB card, models loading strictly one at a time.
+- Test suite green: 47 unit tests, no model downloads required.
