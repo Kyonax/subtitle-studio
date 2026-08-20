@@ -1,0 +1,30 @@
+/*
+ * Copyright (c) 2026 Cristian D. Moreno — @Kyonax
+ * Distributed under the terms of MIT — see LICENSE.
+ *
+ * The kyo-web-online type baseline, minus the vendored web fonts: this page is
+ * a local tool, so it asks for the same families and falls back to whatever
+ * monospace the machine has. Install SpaceMono locally and it looks identical.
+ */
+
+html {
+  font-size: 12px;
+}
+
+body {
+  font-family: "SpaceMono", "SpaceMono Nerd Font", "Roboto Mono", "Courier New", Courier, monospace;
+  font-size: var(--fs-300);
+  line-height: 1.6;
+  letter-spacing: -0.03rem;
+}
+
+h1, h2, h3, h4 {
+  font-family: "Geomanist", "SpaceMono", sans-serif;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+code, pre, kbd {
+  font-family: "SpaceMono", "Roboto Mono", monospace;
+}

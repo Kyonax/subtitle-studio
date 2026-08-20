@@ -1,0 +1,33 @@
+{
+  "name": "subtitle-studio-web",
+  "version": "0.1.0",
+  "description": "Browser studio for subtitle-studio — the whole local pipeline on one page, with live preview.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "author": {
+    "name": "Cristian D. Moreno - Kyonax",
+    "url": "https://github.com/Kyonax"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "sass": "^1.81.0",
+    "vite": "^6.0.7"
+  },
+  "browserslist": [
+    ">0.5%",
+    "last 2 versions",
+    "not dead"
+  ]
+}

@@ -3,6 +3,20 @@
 Dated feature history, newest first. One line per change, current truth lives
 in =STUDIO.doc.org=, rulings in =STUDIO.ai.org=.
 
+* 2026-08-18
+
+- WEB :: the dashboard became a GUIDED FLOW — a three-step spine (source once per video, subtitles once per language, deliver last) states each step's state, situation and single next action; the workspace shows one step at a time beside a preview that never moves, and a status bar carries the running stage, its progress and the produced files with the log on request.
+- WEB :: one state vocabulary everywhere (ready · out of date · not made yet · working) replacing done/fresh/stale/pending/missing; muted text moved off neutral-400 (a surface token, ~2.2:1 on the page) to neutral-300, and nothing meaningful renders below 12.5px.
+- WEB :: one video, N subtitles — a track rail lists every language this video carries, =+ add= translates and builds a new one, and the selected track scopes its own text, style, preview, states and actions (build, burn, download, remove).
+- WEB :: DELIVER — =generate video with all subtitles= writes one Matroska carrying every ticked track as a switchable stream (copied, not re-encoded, ASS styling intact), and =burn <language> into the picture= stays available per track.
+- MUX :: new stage and =subtitle-studio mux INPUT [--tracks es,en]=, ISO 639-2 language tags and readable titles per stream, first track default.
+- WEB :: the whole control surface rebuilt on the nano-core dashboard grammar — one widget shape (label, =?= mark, control), titled bands, squared switches, tooltips instead of help paragraphs; panels reorganised into SOURCE (once per video) | PREVIEW | SUBTITLES (once per language).
+- WEB :: the browser studio, =subtitle-studio web=, the whole pipeline on one page: numbered stages with badges and options, live progress and log over server-sent events, editable transcript, speaker renames, a full style form and the raw styles.toml, the burned video, and a preview that follows whatever you touch.
+- WEB :: Vue 3 + Vite front end in =web/= (the kyo-web-online stack and palette), served from =web/dist= by a standard library HTTP server in =src/subtitle_studio/web/= — no new Python dependency, localhost only, one stage at a time.
+- WEB :: preview truth on the page, the frame is taken at the midpoint of the selected row's first layout chunk through the same engine that writes the burned subtitles; the sample-text card covers the no-transcript case.
+- STYLE :: the two wrapping caps are explained where they are set — the web style form now says which one is active (characters =max_line_chars x max_lines= or words =max_words=) and warns when the word cap can never be reached, the trap behind "words per subtitle does nothing"; behaviour unchanged and now test-locked.
+- TESTS :: 59 -> 90, the new ones lock the stage badges, translation staleness, the retime-on-edit law, comment-preserving style writes, the artifact path guard, the localhost guard and the one-job-at-a-time answer.
+
 * 2026-08-09
 
 - TUI :: pixel-protocol probe moved to import time (before Textual owns the tty), ghostty/kitty render TRUE pixels inline now; =z= toggles fit ↔ FULL SIZE (original image, scrollable pane opening on the subtitle anchor); edit modal fixed, input text visible, nano buttons.
