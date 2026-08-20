@@ -112,7 +112,9 @@ def _anchor_point(style: StyleDef, res_x: int, res_y: int) -> tuple[float, float
 
 def _rounded_rect_path(w: float, h: float, radius: float) -> str:
     r = max(1.0, min(radius, w / 2, h / 2))
-    x0, y0, x1, y1 = 0.0, 0.0, w, h
+    # The origin corner is written literally as `0` in the path below, so only
+    # the far corner needs naming.
+    x1, y1 = w, h
     f = _fmt_num
     return (
         f"m {f(r)} 0 "
