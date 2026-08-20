@@ -1,0 +1,146 @@
+/*
+ * Copyright (c) 2026 Cristian D. Moreno — @Kyonax
+ * Distributed under the terms of MIT — see LICENSE.
+ *
+ * Theme tokens — the Kyonax palette and type scale, the same values
+ * kyo-web-online ships (kyo-web-online/src/scss/abstracts/_variables.scss),
+ * so this control room looks like the rest of the brand.
+ *
+ * Consumed via:
+ *   - vite.config.js css.preprocessorOptions.scss.additionalData
+ *     (injected at the top of every .scss and every <style lang="scss">)
+ *   - abstracts/_index.scss @forward (declarations only)
+ *   - _theme.scss @each loop -> :root { --clr-* / --fs-* }, loaded ONCE
+ */
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Breakpoints — mobile-first. Consumed by min-media-query / max-media-query.
+ * ──────────────────────────────────────────────────────────────────────────── */
+$breakpoints: (
+  sm: 48em,      /* 768px  — Landscape phones */
+  md: 64em,      /* 1024px — Tablets */
+  lg: 75em,      /* 1200px — Desktops */
+  xl: 100em,     /* 1600px — Wide displays */
+);
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Color palette — emitted as --clr-{family}-{shade} CSS custom properties.
+ * The brand color is --clr-primary-100 (#f9cd26).
+ * Background is --clr-neutral-500 (oklch(14.5% 0 0)).
+ * Default border is --clr-border-100 (semi-transparent white, 0.2 alpha).
+ * ──────────────────────────────────────────────────────────────────────────── */
+$colors: (
+  primary: (
+    50:  oklch(92.6% 0.1077 95.8),
+    100: oklch(85.9% 0.1686 91.3),  /* #f9cd26 — canonical brand color */
+    200: oklch(72.6% 0.1484 92.7),
+    300: oklch(57.9% 0.1183 91.2),
+    400: oklch(43.4% 0.0887 86.5),
+    500: oklch(30%   0.0652 69.4),
+  ),
+  secondary: (
+    50:  oklch(76%   0.1173 268.3),
+    100: oklch(54.7% 0.24   264.3),  /* #265ef9 */
+    200: oklch(46.8% 0.1998 264.4),
+    300: oklch(42.3% 0.178  264.5),
+    400: oklch(38.5% 0.1593 264.6),
+    500: oklch(29%   0.1117 264.9),
+  ),
+  neutral: (
+    50:  oklch(76%   0     0),        /* normal foreground — body text — bumped 2026-05-21 from L=70.8% (~4.7:1, AA-marginal) to L=76% (~5.8:1) for a comfortable AA margin. Widely used; the audit flagged it as the next contrast risk after the neutral-300 / neutral-200 fix because the OKLCH conversion landed it just above the 4.5:1 floor with no buffer for rendering variance. */
+    100: oklch(98.5% 0     0),        /* accent foreground — headings / emphasis (AAA on neutral-500) */
+    200: oklch(78%   0.014 286.375),  /* secondary text (subtle cool cast) — bumped 2026-05-20 from L=70.5% so it stays visually distinct from the now-bumped 300 (~6.0:1 AA pass) */
+    300: oklch(70%   0.016 285.938),  /* muted text — bumped 2026-05-20 from L=55.2% (Tailwind zinc-500) which failed WCAG AA (~3.2:1). New value ~4.9:1 on neutral-500; the OKLCH PR inherited the zinc-500 reference without contrast-verification, and Lighthouse flagged it on .skills__item-name / .skills__category-count */
+    400: oklch(37%   0.013 285.805),  /* zinc-700 — dark surfaces / card backgrounds (NOT a text token) */
+    500: oklch(14.5% 0     0),        /* page background */
+    900: oklch(0%    0     0),        /* pure black — modal / image-viewer overlays */
+  ),
+  border: (
+    50:  oklch(96.4% 0 0 / 0.2),
+    100: oklch(100%  0 0 / 0.2),  /* default border */
+    200: oklch(92.8% 0 0 / 0.2),
+    300: oklch(89.1% 0 0 / 0.2),
+    400: oklch(69.3% 0 0 / 0.2),
+    500: oklch(56.8% 0 0 / 0.2),
+    600: oklch(38.5% 0 0 / 0.2),
+  ),
+  success: (
+    50:  oklch(84.6% 0.0987 130.5),
+    100: oklch(70.2% 0.1817 133.5),  /* #6cb42a */
+    200: oklch(57.8% 0.1715 135.9),
+    300: oklch(46.2% 0.1497 140.3),
+    400: oklch(36.3% 0.1233 142.5),
+    500: oklch(26.1% 0.0887 142.5),
+  ),
+  warning: (
+    50:  oklch(86.1% 0.0916 64.2),
+    100: oklch(74.3% 0.169  56.8),  /* #f98b26 */
+    200: oklch(62%   0.1564 53.5),
+    300: oklch(50.6% 0.1416 46.3),
+    400: oklch(39.1% 0.1276 38.1),
+    500: oklch(28.6% 0.1174 29.2),
+  ),
+  error: (
+    50:  oklch(75%   0.105  11.2),
+    100: oklch(55.6% 0.2015 20.7),  /* #d1263d */
+    200: oklch(47.9% 0.1728 20.5),
+    300: oklch(43.4% 0.1552 20.3),
+    400: oklch(38.8% 0.137  19.9),
+    500: oklch(29.2% 0.0972 18.6),
+  ),
+  /* `accent` family — magenta neon (341°). Used by the WORKING_ON project
+     state. Distinct from every other family in the palette and reads as
+     a high-energy "live now" cyberpunk highlight. */
+  accent: (
+    50:  oklch(79.7% 0.1345 337.2),
+    100: oklch(67.7% 0.2516 341.2),  /* #ee3ec5 */
+    200: oklch(63.6% 0.2693 344.4),
+    300: oklch(53.4% 0.226  344.2),
+    400: oklch(42.8% 0.1804 343.8),
+    500: oklch(31.4% 0.1317 343),
+  ),
+);
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Typography scale — emitted as --fs-{size} CSS custom properties.
+ * Three breakpoint tiers (small / medium / large) re-emit at min-md / min-lg.
+ * ──────────────────────────────────────────────────────────────────────────── */
+$typo-scale: (
+  small: (
+    /* Small tier — substantially bumped from the legacy values which
+       rendered body text at 12px and captions at 7.5px on a 12px root,
+       both illegible on phones. New baseline targets phone reading
+       distance: 11.4px–15px for the lower three steps; headings
+       proportionally up so the hierarchy holds. The desktop tiers
+       (medium/large) are intentionally unchanged — they're already
+       sized for further reading distances. */
+    100: 0.95rem,    /* 11.4px */
+    200: 1.05rem,    /* 12.6px */
+    300: 1.15rem,    /* 13.8px */
+    400: 1.25rem,    /* 15px   */
+    500: 1.625rem,   /* 19.5px */
+    600: 2rem,       /* 24px   */
+    700: 2.375rem,   /* 28.5px */
+    800: 3.125rem,   /* 37.5px */
+  ),
+  medium: (
+    100: 0.875rem,   /* 10.5px (was 0.75rem/9px — flagged as very small) */
+    200: 1rem,       /* 12px   */
+    300: 1.125rem,   /* 13.5px */
+    400: 1.25rem,    /* 15px   */
+    500: 1.75rem,    /* 21px   */
+    600: 2.25rem,    /* 27px   */
+    700: 3rem,       /* 36px   */
+    800: 4rem,       /* 48px   */
+  ),
+  large: (
+    100: 0.875rem,   /* 10.5px */
+    200: 1.125rem,   /* 13.5px */
+    300: 1.25rem,    /* 15px   */
+    400: 1.5rem,     /* 18px   */
+    500: 2rem,       /* 24px   */
+    600: 3rem,       /* 36px   */
+    700: 4.5rem,     /* 54px   */
+    800: 6rem,       /* 72px   */
+  ),
+);

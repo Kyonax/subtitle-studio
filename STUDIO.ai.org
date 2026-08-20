@@ -27,8 +27,10 @@ uv run subtitle-studio <command> ...
 | style      | =style INPUT [--lang TRACK] [--styles F] [--preset NAME] [--position P]= |
 | render     | =render INPUT [--lang TRACK] [--codec C] [--cq N]= |
 | run        | =run INPUT [--to LANG \| --swap] [--burn] [--preset NAME] [--position P] [--no-diarize] [--force STAGE]= |
+| mux        | =mux INPUT [--tracks es,en]= (every built =subs.*.ass= into =subtitled.mkv=, streams copied) |
 | models     | =models [asr\|diarize\|translate\|all]= |
 | ui         | =ui [INPUT]= |
+| web        | =web [INPUT] [--host H] [--port N] [--open/--no-open] [--dist DIR]= |
 
 Track names: source language code (=en=, =es=), translated codes, or =swap=.
 Position values: the nine anchors (=bottom-center= etc.) or ='x,y'= in PlayRes
@@ -79,21 +81,108 @@ whisper int8_float16 batch 8 ≈ 3.5 GB (auto-halves to 4 then 2 on CUDA OOM via
 - ffmpeg filtergraph paths need escaping (=render.escape_filter_path=), covers =' : , ; [ ]= and backslash. Real-world OBS filenames contain spaces.
 - WhisperX pins torch tightly. The hedge: =[asr] engine = "faster-whisper"= switches engines without touching downstream stages.
 - =--swap= requires exactly two detected languages, otherwise instruct =--to=.
+- The web page is served from =web/dist=; without a build =subtitle-studio web= answers 503 with the build command instead of a blank page.
+- Chromium's deprecated =--headless=old= stalls on =fetch= against this server; screenshots of the page need =--headless=new= (which in turn never reaches network-idle while the page holds the events stream, so drive it over CDP).
+
+* WEB SURFACE
+
+=subtitle-studio web= serves =web/dist= (Vue 3 + Vite, built with =cd web && npm
+install && npm run build=) plus a JSON API, from =src/subtitle_studio/web/=.
+Standard library only — no framework is added to the Python side. Default bind
+=127.0.0.1:8765=. Build with =npm run dev= for hot reload, Vite proxies =/api=
+to the Python server on 8765 (=STUDIO_API= overrides the target).
+
+| Route | Shape |
+|-------+-------|
+| =GET /api/health= | ffmpeg, GPU name, HF token present, resolved paths, whether the page is built |
+| =GET /api/browse?path== | directory listing (dirs + media files) for the file picker |
+| =GET /api/job?input=&track== | the whole page state: stage badges, transcript rows, speakers, languages, tracks, artifacts, styles |
+| =GET /api/jobs= | running job + last ten |
+| =GET /api/events[?after=SEQ]= | server-sent events: =log= · =progress= · =job= · =invalidate= · =styles= · =trace=, with replay |
+| =POST /api/run= | ={stage, input, options}=, stage ∈ extract·transcribe·relisten·languages·diarize·translate·style·render·run·models·add_track·build_tracks·mux |
+| =POST /api/segment= | ={input, track, id, text}= — retimes words on the source, leaves translated tracks wordless |
+| =POST /api/speaker= | ={input, speaker_id, name}= — propagates to every transcript variant |
+| =POST /api/track/remove= | ={input, track}= — drops one subtitle and its files; the source is never removable |
+| =GET/PUT /api/styles= | read the resolved file + presets + effective StyleDef, or write the whole file |
+| =POST /api/styles/set= | ={table, key, value}=, dotted keys (=background.padding.x=), tomlkit keeps the comments |
+| =POST /api/styles/preset= | ={name, action: create\|delete}= |
+| =GET /api/preview= | one PNG; =input, track, segment, preset, position, sample=; headers =X-Preview-At=, =X-Preview-Segment=, =X-Preview-Mode= |
+| =GET /api/file?path=[&download=1]= | artifact bytes, Range-aware so =<video>= can seek |
+
+The multi-track stages, all built on the same per-track step
+(=_ensure_track=: translate when missing or stale, then style):
+
+| Stage | Does |
+|-------+------|
+| =add_track= | ={to: "fr"}= or ={swap: true}= — a language this video does not have yet, translated then built; a duplicate is refused |
+| =build_tracks= | ={tracks: [...]}= — brings each listed track up to date, progress scaled into one bar |
+| =mux= | ={tracks: [...]}= — same, then =run_mux= writes =subtitled.mkv= with every track switchable |
+
+Contracts the page relies on:
+
+- ONE JOB AT A TIME. =JobRunner.submit= raises =Busy= while a stage runs and the
+  route answers =409 {error, busy: true}=. This is the VRAM law reaching the browser.
+- LOCALHOST ONLY. =Handler._guard= rejects a non-local =Host= header and any
+  peer that is not 127.0.0.1 (a page on the open web can still POST to a local port).
+- PREVIEW TRUTH. =/api/preview= runs =run_style= first, then picks the frame at the
+  midpoint of the selected row's FIRST layout chunk (=segment_events=) — the same
+  engine that writes the burned subtitles, so it WRITES =subs.<track>.ass= as a side
+  effect, exactly like the TUI preview.
+- EDIT INTEGRITY. =/api/segment= calls =retime_words= for source transcripts only;
+  translated variants keep =words = []= because word timings cannot cross languages.
+- STYLES SAFETY. Every write parses the TOML, loads it through =load_styles= and
+  validates every preset before replacing the file, keeping a =.bak=.
+- DELIVERY IS TWO THINGS. =render= burns ONE language into the picture (NVENC,
+  minutes); =mux= puts EVERY built language into one Matroska file as switchable
+  streams (=-c copy=, seconds, ASS styling intact, =-metadata:s:s:N language==
+  carrying ISO 639-2 tags). MP4 cannot hold ASS — Matroska is the container for
+  the mux path, and that is deliberate, not a default.
+- ONE VIDEO, N SUBTITLES. Every language is a =transcript.<lang>.json= +
+  =subs.<lang>.ass= pair; the page's rail iterates exactly those. The source
+  transcript is never removable through the API.
+- GUIDED FLOW. =views/studio.vue= renders bar / =step-spine= / workspace (the
+  active step's panel beside the preview) / =status-bar=. The step lives in the
+  store (=step=, =setStep=, =suggested_step= decides the opening step ONCE per
+  load, never against a choice already made); =step_state= and =step_summary=
+  compute each segment's word and sentence from the same job state the panels
+  read, so the spine can never disagree with them.
+- STATE VOCABULARY. =ui/badge.vue= maps the server's file words onto four: done
+  or fresh -> ready, stale -> out of date, pending or missing -> not made yet,
+  working -> working. Add a state to the server and map it there, never a fifth
+  word in a panel.
+- TYPE AND CONTRAST FLOORS. =--fs-meta= (12.5px) is the floor for anything
+  meaningful; =--fs-tag= (11.4px) is only for uppercase, letter-spaced tags.
+  Muted TEXT uses =--clr-neutral-300=; =--clr-neutral-400= is a surface token
+  (the palette says so) and lands near 2.2:1 on the page background.
+- CONTROL GRAMMAR. The page follows the nano-core dashboard: one widget shape
+  (label + =?= mark + control), titled bands (=ui/group.vue=), =ui/switch.vue=
+  for booleans, help in tooltips (=[data-tip]=), never under the field.
+- =STUDIO_DEBUG=1= prints every request to the terminal, the page has its own log.
 
 * VERIFICATION
 
 Gates for any change, in order:
 
-1. =uv run pytest= green (47 tests, no models needed).
+1. =uv run pytest= green (90 tests, no models needed).
 2. =uv run subtitle-studio run examples/sample.mkv --no-diarize --burn= then re-run, second pass must print skips for extract and transcribe.
 3. Frame check on any styling change: =ffmpeg -ss T -i render.<track>.mp4 -frames:v 1 f.png= and LOOK at it (halo bug class is invisible in the .ass text).
-4. VRAM on ASR/translate changes: =nvidia-smi --query-gpu=memory.used --format=csv -lms 500= while running, peak stays under 6 GB.
+4. Web changes: =cd web && npm run build= then =uv run subtitle-studio web --no-open=, load the page and check the badges match the work directory; the API alone is covered by =tests/test_web_server.py=.
+5. VRAM on ASR/translate changes: =nvidia-smi --query-gpu=memory.used --format=csv -lms 500= while running, peak stays under 6 GB.
 
 * CURRENT RULINGS
 
 Full narratives live in the owner's brain session node =Session Subtitle
 Studio= (=subtitle-studio= key), never in repo files.
 
+- =2026-08-18= WEB :: the page is a GUIDED FLOW (owner approved it against two alternatives on the design canvas) — a three-step spine states source · subtitles · deliver, the workspace shows one step at a time, the preview never moves.
+- =2026-08-18= WEB :: ONE state vocabulary everywhere (ready · out of date · not made yet · working); the server's five file words are mapped in the badge, never re-spelled per panel.
+- =2026-08-18= WEB :: type floor =--fs-meta= 12.5px for meaningful text, =--fs-tag= 11.4px only for uppercase tags; muted text is neutral-300, never neutral-400 (a surface token, ~2.2:1).
+- =2026-08-18= DELIVERY :: two ways out, both first-class — =mux= (all languages, switchable, copied into Matroska) is the default button, =render= (one language burned in) stays per track.
+- =2026-08-18= WEB :: the page is organised by what things ARE — SOURCE happens once per video, a SUBTITLE happens once per language; every per-language control lives in the subtitles column.
+- =2026-08-18= WEB :: controls follow the nano-core dashboard grammar (one widget shape, titled bands, `?` tooltips, squared switches); help text never sits under a field.
+- =2026-08-18= WEB :: the browser studio is Vue 3 + Vite (kyo-web-online stack and palette) over a stdlib HTTP server in the package, no web framework added to the tool.
+- =2026-08-18= WEB :: the page is a third front end, never a replacement — CLI, TUI and web call the same stage functions and the TUI stays first-class.
+- =2026-08-18= WEB :: the style form writes one key at a time through tomlkit so styles.toml keeps its comments; the raw file editor is the escape hatch.
 - =2026-08-08= STYLE :: position is a live choice (CLI/TUI), never styles.toml; presets are =[style.NAME]= tables in the same file.
 - =2026-08-08= STYLE :: rounded backgrounds are drawn layers with real font metrics, square stays BorderStyle=4.
 - =2026-08-08= LANG :: three modes locked, verbatim · unify (passthrough-aware) · swap (exactly two languages, =swap= track).

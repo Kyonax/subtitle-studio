@@ -39,11 +39,11 @@ background = { enabled = true, color = "#000000AA", padding = { x = 16, y = 10 }
 # Distance to frame edges in pixels, vertical applies to the anchored edge.
 margin = { left = 80, right = 80, vertical = 60 }
 # Line length in characters before wrapping, 42 is the subtitle habit.
-max_line_chars = 7
+max_line_chars = 40
 # Lines shown at once, longer text becomes the next timed subtitle.
-max_lines = 2
+max_lines = 1
 # Words shown per subtitle, 0 is no cap, 3 or 4 suits vertical clips.
-max_words = 0
+max_words = 46
 
 # Preset example. A preset lists only what differs from [default]. Uncomment, rename,
 # then use it with --preset neon, the TUI dropdown, or meta default_preset.

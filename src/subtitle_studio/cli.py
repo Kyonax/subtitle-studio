@@ -302,6 +302,23 @@ def render(
 
 
 @app.command()
+def mux(
+    input: Path = typer.Argument(..., exists=True, dir_okay=False),
+    tracks: Optional[str] = typer.Option(None, "--tracks", help="comma-separated track order, e.g. 'es,en'; default every built track"),
+    out: Optional[Path] = OutOpt,
+) -> None:
+    """Put every built subtitle track INTO one video as switchable streams (Matroska, no re-encode)."""
+    from subtitle_studio.stages.mux import run_mux
+
+    wanted = [part.strip() for part in tracks.split(",") if part.strip()] if tracks else None
+    result = run_mux(
+        input, paths.studio_dir(input, out), tracks=wanted,
+        on_progress=lambda msg, _: console.print(f"  {msg}"),
+    )
+    console.print(f"[green]ok[/green] {result}")
+
+
+@app.command()
 def run(
     input: Path = typer.Argument(..., exists=True, dir_okay=False),
     to: Optional[str] = typer.Option(None, "--to", help="also translate to this language"),
@@ -344,6 +361,20 @@ def models(
     from subtitle_studio.models_pull import pull
 
     pull(component, load_settings(config), console)
+
+
+@app.command()
+def web(
+    input: Optional[Path] = typer.Argument(None, exists=True, dir_okay=False),
+    host: str = typer.Option("127.0.0.1", "--host", help="bind address, localhost by default"),
+    port: int = typer.Option(8765, "--port"),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="open the page when the server is up"),
+    dist: Optional[Path] = typer.Option(None, "--dist", help="built page directory (default: web/dist)"),
+) -> None:
+    """Launch the browser studio: the whole pipeline on one page, with live preview."""
+    from subtitle_studio.web import serve
+
+    serve(input, host=host, port=port, open_browser=open_browser, dist_dir=dist)
 
 
 @app.command()

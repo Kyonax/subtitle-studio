@@ -42,3 +42,9 @@ def subs_path(workdir: Path, lang: str) -> Path:
 
 def render_path(workdir: Path, lang: str, ext: str = "mp4") -> Path:
     return workdir / f"render.{lang}.{ext}"
+
+
+def muxed_path(workdir: Path) -> Path:
+    """The one video carrying every subtitle track as a switchable stream.
+    Matroska because it stores ASS verbatim and copies without re-encoding."""
+    return workdir / "subtitled.mkv"

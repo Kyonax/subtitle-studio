@@ -916,7 +916,7 @@ class StudioApp(App):
                 stamp = f" at {self._last_preview_at:.2f}s" if self._last_preview_at is not None else ""
                 self.call_from_thread(
                     self.log_line,
-                    f"[#52E0A3]preview updated[/] "
+                    "[#52E0A3]preview updated[/] "
                     + (f"segment {self._preview_seg_id}{stamp}" if have_transcript and self._preview_seg_id is not None else "(sample text)"),
                 )
             except Exception as exc:

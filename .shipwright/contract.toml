@@ -35,12 +35,19 @@ types = ["feat", "fix", "refactor", "perf", "docs", "test", "build", "chore"]
 scope_required = false
 
 # Match the package layout so a slot yields readable, themed commits.
-scopes = ["asr", "stages", "subtitles", "translate", "tui", "tests", "fonts", "docs"]
+scopes = ["asr", "stages", "subtitles", "translate", "tui", "web", "tests", "fonts", "docs"]
 split_by_scope = true
 
-# Low. The whole publishable tree is 62 files; a slot proposing more than 30 is
-# not incremental work and should wait for a human.
-max_files = 30
+# Recalibrated 2026-08-20. The old value of 30 was set against a 62-file tree;
+# the browser studio (web/ plus src/subtitle_studio/web/) takes the publishable
+# tree to roughly 111 files, so the same "half the tree" judgement lands near 70.
+#
+# The ceiling is not the only thing standing between a large change and main:
+# require_pr covers src/**, web/src/**, web/package.json, web/vite.config.js and
+# pyproject.toml, so anything that changes behaviour goes onto an auto/ branch as
+# a pull request and a human reads it before it merges. This number stops a slot
+# from proposing a whole tree rewrite; review stops everything else.
+max_files = 70
 
 trailer = true
 
@@ -101,11 +108,16 @@ never_commit = [
   ".pytest_cache/**",
   ".ruff_cache/**",
   "*.egg-info/**",
+
+  # 5. The web studio's dependencies and its build. Both are reproducible from
+  #    web/package.json with `npm install && npm run build`.
+  "web/node_modules/**",
+  "web/dist/**",
 ]
 
 # Source changes behaviour; behaviour on a public repo gets a diff someone
 # looked at. Docs, styles and fonts still push directly.
-require_pr = ["src/**", "pyproject.toml", ".github/**"]
+require_pr = ["src/**", "web/src/**", "web/package.json", "web/vite.config.js", "pyproject.toml", ".github/**"]
 
 [repair]
 process = true

@@ -1,0 +1,13 @@
+/*
+ * Copyright (c) 2026 Cristian D. Moreno — @Kyonax
+ * Distributed under the terms of MIT — see LICENSE.
+ *
+ * Abstracts entry — re-exports tokens and mixins, emits ZERO CSS.
+ * It is injected at the top of every .scss file and every <style lang="scss">
+ * block by vite.config.js, so anything that emits rules would be duplicated
+ * once per style block. _theme.scss (which emits :root) is loaded ONCE from
+ * main.scss for exactly that reason.
+ */
+
+@forward "variables";
+@forward "mixins";

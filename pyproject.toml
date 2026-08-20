@@ -31,7 +31,10 @@ tui = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.3"]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.14",
+]
 
 # Heavy ML extras are added in their build phase so the scaffold stays light:
 #   asr       -> whisperx (torch/cu12x via the index below)   [Phase 1]
@@ -57,3 +60,22 @@ packages = ["src/subtitle_studio"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+# Pinned deliberately, because this repo's lint runs UNATTENDED: shipwright's
+# pre_commit gate is `uv run ruff check src tests`, and whatever that command
+# means is what blocks or releases a scheduled commit.
+#
+# Without an explicit select, `ruff check` means "whatever this ruff release
+# enables by default" — 413 rules under 0.16, and a different set under the
+# next version. A dependency bump could then turn every slot red overnight for
+# reasons nobody chose. So the standard is written down here instead.
+#
+# This is ruff's own documented default set: pycodestyle errors (E4 imports,
+# E7 statements, E9 syntax) plus Pyflakes (F). Broaden it when the codebase is
+# ready for it — adding a rule family is a deliberate act, not a side effect of
+# upgrading a tool.
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

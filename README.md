@@ -45,6 +45,8 @@ uv run subtitle-studio run video.mp4 --no-diarize --burn        # subtitles as s
 uv run subtitle-studio run video.mp4 --to en --burn             # everything in English
 uv run subtitle-studio run video.mp4 --swap --burn              # bilingual video, languages crossed
 uv run subtitle-studio ui video.mp4                             # the TUI
+uv run subtitle-studio web video.mp4                            # the browser studio
+uv run subtitle-studio mux video.mp4                            # every built subtitle into one video
 ```
 
 Artifacts land in `video.studio/` next to the input: `transcript.json` (the
@@ -116,6 +118,116 @@ here or in the TUI, it is never part of the styles file.
 uv run subtitle-studio run video.mp4 --to en --preset shorts --position "1280,1000" --burn
 uv run subtitle-studio run video.mp4 --force diarize        # redo from a stage onward
 ```
+
+## The web studio
+
+The same pipeline on one page, for when there is more to manage than a terminal
+window holds comfortably. Vue 3 + Vite on the front, a small local HTTP server
+in the tool itself, no dependency added to the Python side and nothing leaving
+your machine — the server binds to localhost and refuses anything else.
+
+Build the page once (Node 20+):
+
+```bash
+cd web
+npm install
+npm run build
+```
+
+Then run it from anywhere in the project:
+
+```bash
+uv run subtitle-studio web video.mp4      # opens http://127.0.0.1:8765
+uv run subtitle-studio web                # no video yet, pick one in the page
+uv run subtitle-studio web --port 9000 --no-open
+```
+
+The page is a guided flow. A spine across the top states the whole job in
+three sentences — each step carries its state in one word, its situation in one
+sentence, and the single action that moves it forward:
+
+| Step | What it is | What it holds |
+|---|---|---|
+| 1 SOURCE | happens once per video | prepare audio, transcribe, identify speakers, name the voices |
+| 2 SUBTITLES | happens once per language | the track rail (source · english · french · + add), the selected track's state and actions, its text and its style |
+| 3 DELIVER | happens last | one video with every language embedded, or one language burned into the picture |
+
+Click a step to work on it; the workspace shows that step and nothing else,
+beside a preview that never moves because every step changes what it shows.
+A status bar along the bottom carries what is running, its progress, and the
+files produced — the log opens from there when you want it.
+
+### One video, many languages
+
+The rail across the top of the SUBTITLES column is every subtitle this video
+carries. Click one and the rest of the page follows it: its text, its look, its
+preview frame. `+ add` takes a language code, translates the transcript offline
+and builds that subtitle — repeat it for as many languages as you want. Each
+track carries its own three states (text, subtitles, video) and its own
+buttons: build, burn, download the `.ass`, remove.
+
+DELIVER, in the footer, is where subtitles become a video, and there are two
+honest ways to do that:
+
+- **generate video with all subtitles** — every ticked track is written INTO one
+  Matroska file as a switchable stream. The player picks the language, the ASS
+  styling survives intact, and nothing is re-encoded, so a 100 MB video is done
+  in seconds. This is the answer to "one video, five languages".
+- **burn `<language>` into the picture** — one language painted into the frames
+  with NVENC, the version for platforms that ignore subtitle streams.
+
+The same thing from the command line:
+
+```bash
+uv run subtitle-studio translate video.mp4 --to en    # add a language
+uv run subtitle-studio translate video.mp4 --to fr    # and another
+uv run subtitle-studio style video.mp4 --lang fr      # build its subtitle file
+uv run subtitle-studio mux video.mp4                  # all of them into one video
+uv run subtitle-studio mux video.mp4 --tracks es,en   # or just these, in this order
+```
+
+### The controls
+
+Every control on the page is the same widget — a label, a `?` mark, the control
+— grouped into titled bands, the way the nano-core dashboard organises its
+settings. Explanations live in the `?` tooltips instead of under every field,
+which is what keeps thirty settings readable as five decisions.
+
+One vocabulary says where anything stands, everywhere on the page:
+
+| Word | Means |
+|---|---|
+| ready | nothing to do |
+| out of date | something changed after this was made |
+| not made yet | never built |
+| working | running right now |
+
+The preview is the honest one: with a transcript it is a real frame of your
+video, taken at the midpoint of the selected row's first on-screen chunk and
+rendered through the same layout engine that writes the burned subtitles — what
+you see is what burns. Without a transcript it falls back to the sample-text
+card, so a look can be judged before anything is transcribed. Selecting a row
+moves the frame, changing a style value re-renders it.
+
+Editing works the same way it does in the TUI, with the same guarantee: a text
+edit retimes that segment's words, so what you typed always reaches the screen
+and every artifact built from it. The style form writes single keys through
+tomlkit, so `styles.toml` keeps its comments and stays the reference it was
+written to be; the `file` tab edits the whole file when that is faster.
+
+Stages run one at a time, because the models load onto the card one at a time.
+A second request while something is working is refused with a plain message
+instead of queueing two model loads.
+
+Working on the page itself:
+
+```bash
+cd web && npm run dev        # Vite on :5173, /api proxied to the Python server
+uv run subtitle-studio web --no-open   # in another terminal
+```
+
+Keys in the transcript list: `j`/`k` or the arrows walk the rows, `enter` edits
+the selected one, `t` relistens it.
 
 ## The TUI
 
@@ -222,6 +334,15 @@ max_lines = 2               # more text splits into another subtitle
 max_words = 0               # words shown at once, 0 = unlimited
 ```
 
+**How much text one subtitle holds.** Two caps decide it and the smaller one
+wins: characters (`max_line_chars` × `max_lines`) and words (`max_words`).
+`max_words` is a ceiling, not a target — with `max_line_chars = 7` and
+`max_lines = 2` every subtitle stops at 14 characters, so `max_words = 46`
+never applies and nothing appears to change. Fitting W words needs at least
+2W-1 characters, so raise the line length or the line count first. The web
+studio prints which cap is active under the wrapping fields and warns when the
+word cap can never be reached.
+
 Drop font files into `fonts/`, they are matched by real family name and also
 measured so rounded boxes fit the text exactly.
 
@@ -290,6 +411,7 @@ subtitles dead center, burned into `clip.studio/render.es.mp4`.
 | GPU | NVIDIA ~6 GB VRAM, models load one at a time, CPU fallback exists |
 | Disk | ~8 GB of model caches after `models all` |
 | HF token | only for diarization, free account, see Setup step 3 |
+| Node | 20+, only to build the web studio page, the CLI and TUI need nothing |
 
 ## Notes
 

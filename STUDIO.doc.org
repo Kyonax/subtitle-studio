@@ -45,11 +45,13 @@ subtitle-studio/
 │   ├── langid.py             Per-segment language detection (fasttext lid)
 │   ├── speakers.py           Speaker list and rename across all variants
 │   ├── asr/                  Engines: whisperx (default) · faster-whisper
-│   ├── stages/               extract · transcribe · diarize · translate · style · render
+│   ├── stages/               extract · transcribe · diarize · translate · style · render · mux
 │   ├── translate/            Provider protocol + MADLAD-400 CT2 provider
 │   ├── subtitles/            styleconf · fonts · layout · colors · ass_builder
-│   └── tui/                  Textual app, four tabs over the same stages
-└── tests/                    47 unit tests, no models needed
+│   ├── tui/                  Textual app, four tabs over the same stages
+│   └── web/                  Local HTTP surface for the browser studio (stdlib only)
+├── web/                      Vue 3 + Vite page, built into web/dist, served by `web`
+└── tests/                    90 unit tests, no models needed
 #+end_example
 
 ** The pipeline model
@@ -65,6 +67,7 @@ each stage runs alone, resumes cheaply and never repeats fresh work.
 | translate  | =transcript.json=         | =transcript.<track>.json= |
 | style      | transcript + styles.toml  | =subs.<track>.ass=        |
 | render     | media + =subs.<track>.ass= | =render.<track>.mp4=     |
+| mux        | media + every =subs.*.ass= | =subtitled.mkv=          |
 
 =transcript.json= is the single contract: segments with start, end, text,
 per-word timestamps, per-segment language and speaker, plus a speakers map
@@ -72,7 +75,39 @@ whose =SPEAKER_XX= ids are stable forever, renaming only fills a display name.
 =state.json= records each stage's input hashes, =run= skips stages whose inputs
 did not change and =--force STAGE= invalidates from a stage onward.
 
+A video carries as many subtitles as you want: one =transcript.<lang>.json= per
+language, each with its own =subs.<lang>.ass=. The last two stages are the two
+ways of delivering them — =render= burns ONE language into the picture, =mux=
+puts EVERY built language into one Matroska file as switchable streams, copied
+rather than re-encoded so it costs seconds and no quality.
+
 * USAGE
+
+** The three front ends
+
+One set of stage functions, three ways to reach them, so the way of working
+never changes the result.
+
+| Front end | Command | Suits |
+|-----------+---------+-------|
+| CLI | =subtitle-studio <stage> INPUT= | scripting, one-off runs, remote shells |
+| TUI | =subtitle-studio ui [INPUT]= | a terminal session, keyboard-only work |
+| Web | =subtitle-studio web [INPUT]= | many languages at once, a big preview, side-by-side panels |
+
+The web studio is a Vue 3 page built into =web/dist= and served by a standard
+library HTTP server inside the package. It is a GUIDED FLOW: a spine across the
+top states the three steps the tool is made of — SOURCE (once per video),
+SUBTITLES (once per language), DELIVER (last) — each with its state in one word,
+its situation in one sentence and the one action that moves it forward. The
+workspace shows the active step beside a preview that never moves; a status bar
+carries the running stage, its progress and the files produced, with the log
+opening on request. Controls follow the nano-core dashboard grammar — one widget
+shape, titled bands, help in =?= tooltips — and ONE state vocabulary is used
+everywhere: ready · out of date · not made yet · working. It binds to localhost, answers only
+localhost, runs one stage at a time like every other front end, and streams
+stage progress to the page over server-sent events. The page never talks to
+anything but this server.
+
 
 ** Inputs
 

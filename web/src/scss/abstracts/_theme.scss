@@ -1,0 +1,112 @@
+/*
+ * Copyright (c) 2026 Cristian D. Moreno — @Kyonax
+ * Distributed under the terms of MIT — see LICENSE.
+ *
+ * The only abstracts module that emits CSS. Loaded once from main.scss.
+ */
+
+@use "sass:map";
+@use "variables" as *;
+@use "mixins" as *;
+
+:root {
+  @each $color, $shades in $colors {
+    @each $shade, $value in $shades {
+      --clr-#{$color}-#{$shade}: #{$value};
+    }
+  }
+
+  /* Working surfaces. The page is a control room: panels sit slightly above
+     the page background so the hairline borders read as structure. */
+  --clr-surface-100: oklch(17% 0 0);
+  --clr-surface-200: oklch(20% 0 0);
+  --clr-surface-300: oklch(24% 0 0);
+
+  /* Type floors. --fs-100 (10.5px) is too small for anything a person has to
+     read, so meaningful text sits at --fs-meta and only uppercase, letter-spaced
+     tags (badges, section labels, language codes) may use --fs-tag. */
+  --fs-meta: 1.042rem;  /* 12.5px */
+  --fs-tag:  0.95rem;   /* 11.4px */
+
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  @each $screen-size, $font-size in $typo-scale {
+    @if $screen-size == small {
+      @each $size, $value in $font-size {
+        --fs-#{$size}: #{$value};
+      }
+    }
+  }
+}
+
+@include min-media-query(md) {
+  :root {
+    @each $size, $value in map.get($typo-scale, medium) {
+      --fs-#{$size}: #{$value};
+    }
+  }
+}
+
+@include min-media-query(lg) {
+  :root {
+    @each $size, $value in map.get($typo-scale, large) {
+      --fs-#{$size}: #{$value};
+    }
+  }
+}
+
+::selection {
+  background-color: var(--clr-primary-100);
+  color: var(--clr-neutral-500);
+}
+
+@keyframes kyo-glow-pulse {
+  from { opacity: 0.35; }
+  to   { opacity: 0.75; }
+}
+
+@keyframes kyo-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes kyo-stripe {
+  from { background-position: 0 0; }
+  to   { background-position: 2rem 0; }
+}
+
+.cyberpunk-glow {
+  @include cyberpunk-glow;
+}
+
+.kyo-chip {
+  @include kyo-chip;
+}
+
+/* Tooltips, app-wide (the nano-core dashboard pattern): any element carrying
+   data-tip grows a hairline bubble on hover or keyboard focus. Help text lives
+   here instead of under every field, which is what keeps a dense control panel
+   readable. */
+[data-tip] {
+  position: relative;
+}
+
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  background: var(--clr-neutral-500);
+  border: 1px solid var(--clr-border-100);
+  color: var(--clr-neutral-100);
+  padding: 0.25rem 0.4rem;
+  font-size: var(--fs-100);
+  line-height: 1.5;
+  width: max-content;
+  max-width: 22rem;
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  z-index: 30;
+  pointer-events: none;
+}

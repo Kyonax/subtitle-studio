@@ -56,3 +56,72 @@ def test_matching_words_still_do_timed_splits():
     events = segment_events(seg, max_line_chars=8, max_lines=1)
     assert len(events) > 1
     assert events[0].start == 0.0  # timings came from the real words
+
+
+def caps_segment():
+    words = [
+        Word(word=w, start=round(i * 0.5, 3), end=round((i + 1) * 0.5, 3))
+        for i, w in enumerate("uno dos tres cuatro cinco seis siete ocho nueve diez once doce".split())
+    ]
+    return Segment(id=0, start=0.0, end=6.0, text=" ".join(w.word for w in words), words=words)
+
+
+def words_per_event(events):
+    return [sum(len(line.split()) for line in event.lines) for event in events]
+
+
+def test_the_smaller_of_the_two_caps_wins():
+    """A subtitle is capped twice, by characters (max_line_chars * max_lines) and
+    by words (max_words). Whichever is smaller decides — a generous max_words is
+    invisible while the character cap is tight, which reads like a broken setting.
+    """
+    segment = caps_segment()
+
+    # a tight character cap decides, however many words are allowed
+    tight = segment_events(segment, max_line_chars=7, max_lines=2, max_words=46)
+    assert words_per_event(tight) == words_per_event(segment_events(segment, 7, 2, max_words=0))
+    assert all(len(event.text.replace(r"\N", " ")) <= 14 for event in tight)
+
+    # give the characters room and the word cap is the one that bites
+    roomy = segment_events(segment, max_line_chars=60, max_lines=3, max_words=4)
+    assert words_per_event(roomy) == [4, 4, 4]
+
+    # a word cap above what the characters can ever hold changes nothing
+    assert words_per_event(segment_events(segment, 60, 3, max_words=46)) == words_per_event(
+        segment_events(segment, 60, 3, max_words=0)
+    )
+
+
+def test_rebuilding_identical_subtitles_leaves_the_file_alone(tmp_path):
+    """A preview rebuilds the ASS constantly. If an identical rebuild touched
+    the file, every video built from it would look stale forever."""
+    import os
+    import time
+
+    from subtitle_studio.schema import Segment, SourceInfo, Transcript, save_transcript
+    from subtitle_studio.stages.style import run_style
+
+    workdir = tmp_path / "clip.studio"
+    workdir.mkdir()
+    video = tmp_path / "clip.mkv"
+    video.write_bytes(b"not a video")
+    transcript = Transcript(
+        source=SourceInfo(media_path=str(video)),
+        language="es",
+        segments=[Segment(id=0, start=0.0, end=2.0, text="Hola mundo.")],
+    )
+    save_transcript(transcript, workdir / "transcript.json")
+
+    first = run_style(video, workdir, styles_path=tmp_path / "missing.toml")
+    stamp = first.stat().st_mtime
+    os.utime(first, (stamp - 100, stamp - 100))
+    aged = first.stat().st_mtime
+
+    run_style(video, workdir, styles_path=tmp_path / "missing.toml")
+    assert first.stat().st_mtime == aged          # untouched, same subtitles
+
+    transcript.segments[0].text = "Hola mundo entero."
+    save_transcript(transcript, workdir / "transcript.json")
+    time.sleep(0.01)
+    run_style(video, workdir, styles_path=tmp_path / "missing.toml")
+    assert first.stat().st_mtime > aged           # real change, real write

@@ -1,0 +1,70 @@
+/*
+ * Copyright (c) 2026 Cristian D. Moreno — @Kyonax
+ * Distributed under the terms of MIT — see LICENSE.
+ *
+ * Mixins — the subset of the kyo-web-online set this page uses.
+ * No font-face mixin here: the studio uses the font stack, not vendored files.
+ */
+
+@use "sass:map";
+
+@use "variables" as *;
+
+@mixin min-media-query($key) {
+  $size: map.get($breakpoints, $key);
+  @media only screen and (min-width: $size) {
+    @content;
+  }
+}
+
+@mixin max-media-query($key) {
+  $size: map.get($breakpoints, $key);
+  @media only screen and (max-width: $size) {
+    @content;
+  }
+}
+
+/* cyberpunk-glow — animated halo. drop-shadow composites on the GPU; the
+   breathing layer animates opacity only and shares one @keyframes emitted
+   in _theme.scss. */
+@mixin cyberpunk-glow($glow-color: var(--clr-primary-100), $blur: 1px, $spread: 9px, $animated: true, $speed: 1.5s) {
+  position: relative;
+  --_glow-color:  #{$glow-color};
+  --_glow-blur:   #{$blur};
+  --_glow-spread: #{$spread};
+
+  filter: drop-shadow(0 0 var(--_glow-spread) var(--_glow-color));
+
+  @if $animated {
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      z-index: -1;
+      box-shadow: 0 0 calc(var(--_glow-spread) * 1.5) var(--_glow-color);
+      opacity: 0.55;
+      animation: kyo-glow-pulse $speed ease-in-out infinite alternate;
+      transform: translateZ(0);
+      will-change: opacity;
+    }
+  }
+}
+
+/* kyo-chip — cap-tracked pill with a currentColor border and an 8% tint.
+   Set `color` on the call site and the border and background follow. */
+@mixin kyo-chip {
+  font-family: "SpaceMono", "Roboto Mono", monospace;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+/* panel — the hairline surface every column of the studio sits on. */
+@mixin panel($surface: var(--clr-surface-100)) {
+  background: $surface;
+  border: 1px solid var(--clr-border-100);
+}
