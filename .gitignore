@@ -18,6 +18,16 @@ __pycache__/
 *.pyo
 *.egg-info/
 dist/
+
+# ---------------------------------------------------------------------------
+# Node dependencies — kept HERE, at the root, on purpose
+# ---------------------------------------------------------------------------
+# web/.gitignore already ignores these, but that file only exists once web/ is
+# tracked. A branch restore that checks out a commit without it deletes it from
+# the working tree, and 629 node_modules files (47 MB) reappear as untracked
+# the instant it is gone. This root file is tracked on main and survives that.
+node_modules/
+.vite/
 build/
 .pytest_cache/
 .ruff_cache/
