@@ -33,17 +33,17 @@ def test_header_uses_video_resolution_and_own_wrapping():
 
 def test_speaker_override_gets_own_style_and_alignment():
     doc = build_ass(make_transcript(), styles_with_speaker_override(), None)
-    style_lines = [l for l in doc.splitlines() if l.startswith("Style: ")]
-    names = [l.split(":", 1)[1].split(",")[0].strip() for l in style_lines]
+    style_lines = [line for line in doc.splitlines() if line.startswith("Style: ")]
+    names = [line.split(":", 1)[1].split(",")[0].strip() for line in style_lines]
     assert names == ["Default", "S_SPEAKER_01"]
-    s01 = next(l for l in style_lines if "S_SPEAKER_01" in l)
+    s01 = next(line for line in style_lines if "S_SPEAKER_01" in line)
     fields = s01.split(",")
     assert fields[19 - 1].strip() == "8"  # Alignment field = top-center
 
 
 def test_dialogue_lines_carry_speaker_names_and_escaped_braces():
     doc = build_ass(make_transcript(), styles_with_speaker_override(), None)
-    dialogues = [l for l in doc.splitlines() if l.startswith("Dialogue: ")]
+    dialogues = [line for line in doc.splitlines() if line.startswith("Dialogue: ")]
     assert len(dialogues) == 2
     assert ",María," in dialogues[0]
     assert r"\{tardes\}" in dialogues[1]
@@ -58,7 +58,7 @@ def test_explicit_xy_position_emits_pos_override():
 def test_background_disabled_uses_stroke_outline():
     styles = StylesConfig(default=StyleDef.model_validate({"background": {"enabled": False}, "stroke": {"width": 2.5}}))
     doc = build_ass(make_transcript(), styles, None)
-    default = next(l for l in doc.splitlines() if l.startswith("Style: Default"))
+    default = next(line for line in doc.splitlines() if line.startswith("Style: Default"))
     fields = default.split(",")
     assert fields[16 - 1].strip() == "1"  # BorderStyle=1 (outline, no box)
     assert fields[17 - 1].strip() == "2.5"  # Outline = stroke width

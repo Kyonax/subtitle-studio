@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from subtitle_studio.preview import render_style_preview
 
