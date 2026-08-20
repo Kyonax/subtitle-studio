@@ -19,7 +19,7 @@ from typing import Callable
 from subtitle_studio import paths
 from subtitle_studio.config import Settings
 from subtitle_studio.gpu import cuda_available, gpu_model
-from subtitle_studio.schema import SpeakerInfo, Transcript, load_transcript, save_transcript
+from subtitle_studio.schema import SpeakerInfo, load_transcript, save_transcript
 from subtitle_studio.state import hash_file, hash_obj, record_stage
 
 ProgressFn = Callable[[str, float], None]

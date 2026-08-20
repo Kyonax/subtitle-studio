@@ -92,7 +92,13 @@ def run_style(
 
     document = build_ass(transcript, styles, fonts_dir, preset=preset)
     out = paths.subs_path(workdir, transcript.language or "und")
-    out.write_text(document, encoding="utf-8")
+    # Only touch the file when the subtitles actually changed. Previews rebuild
+    # the ASS constantly (that is what makes the preview truthful), and a
+    # rewrite with identical bytes would age every artifact built from it —
+    # the burned video and the muxed one would report themselves stale for no
+    # reason at all.
+    if not out.exists() or out.read_text(encoding="utf-8") != document:
+        out.write_text(document, encoding="utf-8")
 
     inputs = {
         "transcript": hash_file(transcript_file),
