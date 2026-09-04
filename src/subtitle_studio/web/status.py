@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from subtitle_studio import paths
-from subtitle_studio.config import Settings
+from subtitle_studio.config import Settings, load_settings
 from subtitle_studio.schema import Transcript, load_transcript
 from subtitle_studio.state import hash_file, hash_obj, load_state, stage_fresh
 
@@ -222,15 +222,25 @@ def _language_rows(transcript: Transcript) -> list[dict]:
     )
 
 
-def styles_info(input_media: Path | None, preset: str | None = None) -> dict:
-    from subtitle_studio.stages.style import resolve_styles_path
+def styles_info(
+    input_media: Path | None, preset: str | None = None, track: str | None = None
+) -> dict:
+    from subtitle_studio.stages.style import resolve_fonts_dir, resolve_styles_path
+    from subtitle_studio.subtitles.fonts import available_fonts
     from subtitle_studio.subtitles.styleconf import ANCHORS, load_styles
 
     resolved = resolve_styles_path(None, input_media)
     config = load_styles(resolved)
     active = preset or config.default_preset
+    # The language key is what [track.<lang>] is filed under, and what the page
+    # needs so an edit lands on the subtitle the owner is actually looking at.
+    track_key = (
+        track_language(paths.studio_dir(input_media, None), track)
+        if input_media and input_media.exists()
+        else (track or None)
+    )
     try:
-        effective = config.base(active).model_dump()
+        effective = config.base(active, track_key).model_dump()
         error = None
     except ValueError as exc:  # unknown preset name
         effective = config.default.model_dump()
@@ -245,6 +255,9 @@ def styles_info(input_media: Path | None, preset: str | None = None) -> dict:
         "effective": effective,
         "default": config.default.model_dump(),
         "anchors": list(ANCHORS),
+        "fonts": available_fonts(resolve_fonts_dir(load_settings(None).paths.fonts_dir)),
+        "track": track_key,
+        "track_tables": config.track_names(),
         "error": error,
     }
 

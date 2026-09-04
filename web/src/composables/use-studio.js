@@ -118,6 +118,10 @@ export const preview = reactive({
   error: '',
   zoom: 'fit',
   sample: false,
+  /* Every built language at once, the way a video carrying all of them looks.
+     On by default: showing one track while the video will carry several is the
+     misleading answer. */
+  all_tracks: true,
   stamp: 0,
 });
 
@@ -158,7 +162,7 @@ export const refreshState = async () => {
 
 export const refreshStyles = async () => {
   try {
-    styles.value = await api.styles(input.value, options.preset);
+    styles.value = await api.styles(input.value, options.preset, track.value);
   } catch (exc) {
     error.value = exc.message;
   }
@@ -194,6 +198,7 @@ export const refreshPreview = async () => {
       position: options.position,
       segment: selected_segment.value,
       sample: preview.sample ? 1 : '',
+      all: preview.all_tracks ? 1 : 0,
     }, preview_abort.signal);
     if (preview.url) {
       URL.revokeObjectURL(preview.url);
@@ -233,7 +238,9 @@ export const setInput = async (path) => {
 export const setTrack = async (value) => {
   track.value = value || '';
   persist();
-  await refreshState();
+  /* styles follow the track: [track.<lang>] is per-language, so the form must
+     re-read against the newly selected subtitle. */
+  await Promise.all([refreshState(), refreshStyles()]);
   schedulePreview(true);
 };
 
@@ -360,6 +367,17 @@ export const buildTracks = (ids) => runStage('build_tracks', { tracks: ids });
 export const buildTrack = (id) => runStage('build_tracks', { tracks: [id] });
 
 export const burnTrack = (id) => runStage('render', { track: id });
+
+/* One video with every language painted into the picture, from the same
+   document the preview showed. Quality-first by default: libx264 beats the
+   hardware encoder per bitrate, and a delivery master is encoded once. */
+export const burnEveryLanguage = () => runStage('render', {
+  all: true, codec: 'libx264', encoder_preset: 'slow', cq: 15,
+  /* The preview is asked for with this position, so the burn must be too --
+     a track with no [track.<lang>].position of its own would otherwise sit in
+     one place on screen and a different one in the file (Law 4). */
+  preset: options.preset, position: options.position,
+});
 
 export const generateVideo = (ids) => runStage('mux', { tracks: ids });
 

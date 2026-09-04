@@ -116,6 +116,63 @@ def retime_words(segment: "Segment", new_text: str) -> list[Word]:
     ]
 
 
+def words_from_source_timing(source: "Segment", text: str) -> list[Word]:
+    """Word timings for a TRANSLATION, taken from the source speech.
+
+    A translated segment carries no word timings, so layout can only split it
+    proportionally: every chunk gets a share of the segment in proportion to its
+    characters. That ignores pauses, so a translated line drifts away from the
+    voice while the source line -- split on real word timestamps -- stays on it.
+
+    Both languages say the same thing in the same order, so a position through
+    the translation is a good estimate of the same position through the speech.
+    We map each translated word's character span onto the SOURCE word timeline
+    and read the time back out. A silence between two source words is a jump in
+    that timeline, so the translation inherits the real pauses instead of
+    averaging over them.
+
+    Falls back to an even spread when the source has no timings either.
+    """
+    tokens = text.split()
+    if not tokens:
+        return []
+    src = [w for w in source.words if w.end >= w.start]
+    if not src:
+        return retime_words(source.model_copy(update={"words": []}), text)
+
+    # Source timeline: cumulative character fraction -> time.
+    src_chars = [max(len(w.word.strip()), 1) for w in src]
+    total_src = sum(src_chars)
+    bounds, cursor = [], 0
+    for length in src_chars:
+        bounds.append((cursor / total_src, (cursor + length) / total_src))
+        cursor += length
+
+    def time_at(fraction: float) -> float:
+        fraction = min(max(fraction, 0.0), 1.0)
+        for (lo, hi), word in zip(bounds, src):
+            if fraction <= hi or (lo, hi) == bounds[-1]:
+                span = hi - lo or 1.0
+                inside = min(max((fraction - lo) / span, 0.0), 1.0)
+                return word.start + (word.end - word.start) * inside
+        return src[-1].end
+
+    out: list[Word] = []
+    lengths = [max(len(t), 1) for t in tokens]
+    total = sum(lengths)
+    cursor = 0
+    for token, length in zip(tokens, lengths):
+        start = time_at(cursor / total)
+        cursor += length
+        end = time_at(cursor / total)
+        if out and start < out[-1].end:      # keep the list monotonic
+            start = out[-1].end
+        out.append(Word(word=token, start=round(start, 3),
+                        end=round(max(end, start + 0.001), 3),
+                        score=None, speaker=source.speaker))
+    return out
+
+
 class SchemaVersionError(ValueError):
     pass
 

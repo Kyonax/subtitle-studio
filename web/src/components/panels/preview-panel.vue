@@ -75,6 +75,14 @@ const toggleZoom = () => {
   preview.zoom = preview.zoom === 'fit' ? 'full' : 'fit';
 };
 
+/* Only worth offering once there is a second language to overlay. */
+const multi_track = computed(() => (state.value?.tracks || []).length > 1);
+
+const toggleAllTracks = () => {
+  preview.all_tracks = !preview.all_tracks;
+  schedulePreview(true);
+};
+
 const openFullSize = () => {
   if (preview.url) {
     window.open(preview.url, '_blank', 'noopener');
@@ -116,6 +124,17 @@ const openFullSize = () => {
         @click="toggleSample"
       >
         sample
+      </UiButton>
+      <UiButton
+        v-if="multi_track"
+        size="sm"
+        variant="ghost"
+        :active="preview.all_tracks"
+        :disabled="preview.sample"
+        title="show every language stacked, as a video carrying all of them would"
+        @click="toggleAllTracks"
+      >
+        {{ preview.all_tracks ? 'all langs' : 'one lang' }}
       </UiButton>
       <UiButton
         size="sm"
