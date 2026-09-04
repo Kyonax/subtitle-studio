@@ -9,9 +9,10 @@ libass collision handling never shifts one layer away from another.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
-from subtitle_studio.schema import Transcript
+from subtitle_studio.schema import Segment, Transcript
 from subtitle_studio.subtitles.colors import parse_hex, to_ass
 from subtitle_studio.subtitles.fonts import line_height, measure_line, resolve_font
 from subtitle_studio.subtitles.layout import Event, segment_events
@@ -98,10 +99,15 @@ def play_res(transcript: Transcript, styles: StylesConfig) -> tuple[int, int]:
 
 
 def _anchor_point(style: StyleDef, res_x: int, res_y: int) -> tuple[float, float]:
-    """The \\pos point for this style's alignment + margins."""
+    """The \\pos point for this style's alignment + margins.
+
+    Explicit coordinates are measured from the centre of the frame: (0, 0) is
+    the middle of the video, +x runs right and +y runs down. Anchors keep using
+    the margins, which are edge distances.
+    """
     pos = style.pos_override()
     if pos:
-        return float(pos[0]), float(pos[1])
+        return res_x / 2 + pos[0], res_y / 2 + pos[1]
     an = style.alignment()
     col = (an - 1) % 3  # 0 left, 1 center, 2 right
     row = (an - 1) // 3  # 0 bottom, 1 middle, 2 top
@@ -125,6 +131,19 @@ def _rounded_rect_path(w: float, h: float, radius: float) -> str:
     )
 
 
+def _drop_end_period(line: str) -> str:
+    """Strip the full stop that closes a subtitle, and nothing else.
+
+    An ellipsis means the sentence runs on into the next card, and "?"/"!"
+    carry tone, so only a lone "." is removed. Trailing spaces are kept off the
+    result because a measured box would otherwise size itself around them.
+    """
+    stripped = line.rstrip()
+    if stripped.endswith(".") and not stripped.endswith(".."):
+        return stripped[:-1].rstrip()
+    return line
+
+
 class _Block:
     """Geometry of one on-screen subtitle block (text + optional drawn box)."""
 
@@ -132,7 +151,10 @@ class _Block:
         self.style = style
         self.event = event
         family = resolve_font(style.font, fonts_dir)
-        self.lines = [line.upper() for line in event.lines] if style.uppercase else event.lines
+        lines = list(event.lines)
+        if lines and not style.end_period:
+            lines[-1] = _drop_end_period(lines[-1])
+        self.lines = [line.upper() for line in lines] if style.uppercase else lines
         widths = [
             measure_line(line, family, style.size, style.letter_spacing, fonts_dir) * style.scale_x / 100
             for line in self.lines
@@ -173,29 +195,53 @@ def build_ass(
     styles: StylesConfig,
     fonts_dir: Path | None,
     preset: str | None = None,
+    track: str | None = None,
+    track_of: Callable[[Segment], str | None] | None = None,
 ) -> str:
+    """`track` names the [track.<lang>] override for the whole document.
+
+    `track_of` overrides it per segment, which is what the all-languages
+    preview needs: one document holding several tracks, each keeping its own
+    look, so the stacking that separates them is the real engine's and not the
+    preview's own arithmetic.
+    """
     res = play_res(transcript, styles)
     res_x, res_y = res
 
-    # Styles: Default (base+preset) + one per speaker override key in the config.
-    base = styles.base(preset)
-    style_lines = [_style_line("Default", base, fonts_dir)]
-    speaker_styles: dict[str, tuple[str, StyleDef]] = {}
-    for speaker_id in transcript.speakers:
-        display = transcript.display_name(speaker_id)
-        name, style = styles.resolve(speaker_id, display, preset)
-        if name != "Default":
-            speaker_styles[speaker_id] = (name, style)
+    # (track, speaker) -> (ass style name, merged StyleDef). The same speaker in
+    # two languages is two styles, so the pair is the key, not the speaker alone.
+    resolved: dict[tuple[str | None, str | None], tuple[str, StyleDef]] = {}
+
+    def style_for(track_key: str | None, speaker_id: str | None) -> tuple[str, StyleDef]:
+        cache_key = (track_key, speaker_id)
+        if cache_key not in resolved:
+            display = transcript.display_name(speaker_id) if speaker_id else None
+            resolved[cache_key] = styles.resolve(speaker_id, display, preset, track_key)
+        return resolved[cache_key]
+
+    tracks_used = (
+        {track_of(segment) for segment in transcript.segments} if track_of else {track}
+    )
+
+    # Styles: the base for every track in the document, plus each speaker override.
+    style_lines: list[str] = []
     seen: set[str] = set()
-    for name, style in speaker_styles.values():
+    for track_key in sorted(tracks_used, key=lambda t: (t is not None, t or "")):
+        name, style = style_for(track_key, None)
         if name not in seen:
             seen.add(name)
             style_lines.append(_style_line(name, style, fonts_dir))
+        for speaker_id in transcript.speakers:
+            s_name, s_style = style_for(track_key, speaker_id)
+            if s_name not in seen:
+                seen.add(s_name)
+                style_lines.append(_style_line(s_name, s_style, fonts_dir))
 
     # Blocks in start order, with deterministic stacking for time-overlaps.
     blocks: list[tuple[str, _Block]] = []
     for segment in transcript.segments:
-        style_name, style = speaker_styles.get(segment.speaker, ("Default", base))
+        track_key = track_of(segment) if track_of else track
+        style_name, style = style_for(track_key, segment.speaker)
         for event in segment_events(segment, style.max_line_chars, style.max_lines, style.max_words):
             blocks.append((style_name, _Block(style, event, fonts_dir, res)))
     blocks.sort(key=lambda item: item[1].event.start)
@@ -203,7 +249,13 @@ def build_ass(
     dialogue_lines: list[str] = []
     for i, (style_name, block) in enumerate(blocks):
         margin_v = 0
-        for prev_name, prev in blocks[:i]:
+        # An explicit x,y is an instruction, not a suggestion. Auto-stacking
+        # exists to keep ANCHORED subtitles off each other; a subtitle the
+        # author placed by coordinate must hold that spot for the whole video,
+        # or one language ends up on two different rows depending on whether it
+        # happened to overlap another track.
+        placed = block.style.pos_override() is not None
+        for prev_name, prev in ([] if placed else blocks[:i]):
             overlaps = prev.event.end > block.event.start and prev.event.start < block.event.end
             if not (overlaps and prev.style.alignment() == block.style.alignment()):
                 continue
