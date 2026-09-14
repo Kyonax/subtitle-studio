@@ -260,3 +260,31 @@ def test_a_single_string_track_key_still_works():
 
     assert config.base(None, "es").size == 30
     assert config.base(None, ("translated", "es")).size == 30
+
+
+def test_the_all_languages_preview_is_the_burn(tmp_path, monkeypatch):
+    """Law 4: the frame the preview shows and the video the burn writes are the
+    same bytes. With role tables, a preview keyed by language alone would drop
+    [track.source] / [track.translated] while the burn applied them."""
+    from subtitle_studio import paths
+    from subtitle_studio.schema import save_transcript
+    from subtitle_studio.stages.style import run_style_combined
+    from subtitle_studio.web import server
+
+    source = transcript("en", "Hello there.")
+    translated = transcript("es", "Hola.").model_copy(update={"translated_from": "en"})
+    save_transcript(source, paths.transcript_path(tmp_path))
+    save_transcript(translated, paths.transcript_path(tmp_path, "es"))
+    styles_file = tmp_path / "styles.toml"
+    styles_file.write_text(
+        '[track.source]\ncolor = "#F9CD26"\n\n'
+        '[track.translated]\ncolor = "#f6f5f4"\nsize = 25\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(server, "PREVIEW_ASS", tmp_path / "preview.ass")
+
+    preview = server._combined_subs(tmp_path, styles_file, None, None, None)
+    burned = run_style_combined(tmp_path / "video.mp4", tmp_path, styles_path=styles_file)
+
+    assert preview.read_text(encoding="utf-8") == burned.read_text(encoding="utf-8")
+    assert "Style: T_source," in preview.read_text(encoding="utf-8")

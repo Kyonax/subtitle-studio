@@ -912,9 +912,8 @@ def _combined_subs(
     bogus "preview" language. It is a view, not an artifact — nothing is
     recorded as a stage and nothing downstream goes stale because of it.
     """
-    from subtitle_studio.preview import merge_transcripts
     from subtitle_studio.schema import load_transcript
-    from subtitle_studio.subtitles.ass_builder import build_ass
+    from subtitle_studio.stages.style import combined_document
     from subtitle_studio.subtitles.styleconf import load_styles, parse_position
     from subtitle_studio.web.status import available_tracks
 
@@ -937,11 +936,7 @@ def _combined_subs(
     if position:
         styles.default = styles.default.model_copy(update={"position": parse_position(position)})
 
-    merged, track_by_id = merge_transcripts(transcripts)
-    document = build_ass(
-        merged, styles, fonts_dir, preset=preset,
-        track_of=lambda segment: track_by_id.get(segment.id),
-    )
+    document = combined_document(transcripts, styles, fonts_dir, preset)
     PREVIEW_ASS.write_text(document, encoding="utf-8")
     return PREVIEW_ASS
 

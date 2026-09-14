@@ -121,6 +121,34 @@ def run_style(
     return out
 
 
+def combined_document(
+    transcripts: list,
+    styles,
+    fonts_dir: Path | None,
+    preset: str | None,
+) -> str:
+    """The all-languages ASS text, for the preview and the burn alike.
+
+    Both callers go through this one function, so the frame the preview shows
+    and the video the burn writes cannot resolve a track differently (Law 4).
+    Each segment is keyed by (role, language), so [track.source] and
+    [track.translated] apply first and [track.<lang>] overrides them.
+    """
+    from subtitle_studio.preview import merge_transcripts
+
+    roles = {
+        (t.language or "und"): ("translated" if t.translated_from else "source")
+        for t in transcripts
+    }
+    merged, track_by_id = merge_transcripts(transcripts)
+
+    def track_of(segment):
+        lang = track_by_id.get(segment.id)
+        return (roles.get(lang, "source"), lang) if lang else None
+
+    return build_ass(merged, styles, fonts_dir, preset=preset, track_of=track_of)
+
+
 def run_style_combined(
     input_media: Path,
     workdir: Path,
@@ -140,7 +168,6 @@ def run_style_combined(
     timespan are separated by the builder's own overlap stacking — the same
     arithmetic a single-language document uses.
     """
-    from subtitle_studio.preview import merge_transcripts
     from subtitle_studio.state import hash_obj
     from subtitle_studio.web.status import available_tracks
 
@@ -165,17 +192,7 @@ def run_style_combined(
     if on_progress:
         on_progress(f"building one subtitle from {len(transcripts)} languages", 0.4)
 
-    roles = {
-        (t.language or "und"): ("translated" if t.translated_from else "source")
-        for t in transcripts
-    }
-    merged, track_by_id = merge_transcripts(transcripts)
-
-    def track_of(segment):
-        lang = track_by_id.get(segment.id)
-        return (roles.get(lang, "source"), lang) if lang else None
-
-    document = build_ass(merged, styles, fonts_dir, preset=preset, track_of=track_of)
+    document = combined_document(transcripts, styles, fonts_dir, preset)
     out = paths.combined_subs_path(workdir)
     if not out.exists() or out.read_text(encoding="utf-8") != document:
         out.write_text(document, encoding="utf-8")

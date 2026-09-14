@@ -94,6 +94,17 @@ def track_language(workdir: Path, track: str | None) -> str:
         return "und"
 
 
+def track_role(workdir: Path, track: str | None) -> str:
+    """The [track.<role>] table a track resolves before its language one:
+    "translated" when its transcript was translated, else "source" -- the rule
+    `style` applies when it builds the subtitles."""
+    try:
+        transcript = load_transcript(paths.transcript_path(workdir, track or None))
+    except Exception:
+        return "translated" if track else "source"
+    return "translated" if transcript.translated_from else "source"
+
+
 def available_tracks(workdir: Path) -> list[dict]:
     tracks = []
     source = paths.transcript_path(workdir)
@@ -234,13 +245,17 @@ def styles_info(
     active = preset or config.default_preset
     # The language key is what [track.<lang>] is filed under, and what the page
     # needs so an edit lands on the subtitle the owner is actually looking at.
-    track_key = (
-        track_language(paths.studio_dir(input_media, None), track)
-        if input_media and input_media.exists()
-        else (track or None)
-    )
+    # The effective style resolves the role table first, as `style` does, so
+    # the panel shows what the burn will paint.
+    if input_media and input_media.exists():
+        workdir = paths.studio_dir(input_media, None)
+        track_key = track_language(workdir, track)
+        resolve_key = (track_role(workdir, track), track_key)
+    else:
+        track_key = track or None
+        resolve_key = track_key
     try:
-        effective = config.base(active, track_key).model_dump()
+        effective = config.base(active, resolve_key).model_dump()
         error = None
     except ValueError as exc:  # unknown preset name
         effective = config.default.model_dump()
