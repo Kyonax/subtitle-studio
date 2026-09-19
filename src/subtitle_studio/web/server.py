@@ -56,6 +56,8 @@ def default_dist_dir() -> Path:
 
 
 PREVIEW_PNG = Path(tempfile.gettempdir()) / "subtitle-studio-web-preview.png"
+# The all-languages overlay. Temp, never the work directory — see _combined_subs.
+PREVIEW_ASS = Path(tempfile.gettempdir()) / "subtitle-studio-web-preview.ass"
 SERVED_SUFFIXES = {".png", ".jpg", ".jpeg", ".ass", ".srt", ".json", ".wav", ".mp3", ".mp4", ".mkv", ".webm", ".mov"}
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1", "0.0.0.0"}
 
@@ -302,11 +304,36 @@ def _stage_job(studio: Studio, body: dict) -> tuple[str, str, object]:
 
     if stage == "render":
         from subtitle_studio.stages.render import run_render
+        from subtitle_studio.stages.style import run_style_combined
 
         if options.get("codec"):
             settings.render.codec = options["codec"]
+        # NOT "preset": that key already names the [style.NAME] table, and
+        # feeding an encoder preset into it fails as an unknown style preset.
+        if options.get("encoder_preset"):
+            settings.render.preset = options["encoder_preset"]
         if options.get("cq") not in (None, ""):
             settings.render.cq = _int(options.get("cq"), settings.render.cq)
+
+        # Every language painted in at once, from the same document the preview
+        # showed. One video, all subtitles — not switchable streams.
+        if _bool(options.get("all")):
+            def burn_all(progress):
+                combined = run_style_combined(
+                    input_media, workdir, styles_path=styles_path, fonts_dir=fonts_dir,
+                    preset=preset, position=position,
+                    on_progress=lambda msg, frac: progress(msg, frac * 0.05),
+                )
+                if combined is None:
+                    raise ApiError(400, "only one subtitle here — burn it as a single language")
+                return run_render(
+                    input_media, workdir, settings, "all", fonts_dir=fonts_dir,
+                    on_progress=lambda msg, frac: progress(msg, 0.05 + frac * 0.95),
+                    subs=combined,
+                )
+
+            return stage, "burn every language", burn_all
+
         target = track_language(workdir, track)
         return stage, "burn video", lambda progress: run_render(
             input_media, workdir, settings, target, fonts_dir=fonts_dir, on_progress=progress
@@ -760,7 +787,11 @@ def route_track_remove(handler: Handler, query: dict, body: dict) -> dict:
 def route_styles_get(handler: Handler, query: dict, body: dict) -> dict:
     studio = handler.studio
     input_media = _input_path(query.get("input"), studio, required=False)
-    info = styles_info(input_media, (query.get("preset") or "").strip() or None)
+    info = styles_info(
+        input_media,
+        (query.get("preset") or "").strip() or None,
+        (query.get("track") or "").strip() or None,
+    )
     info["raw"] = Path(info["path"]).read_text(encoding="utf-8") if info["path"] else ""
     return info
 
@@ -867,6 +898,49 @@ def route_styles_preset(handler: Handler, query: dict, body: dict) -> dict:
     return {"path": str(path), "presets": sorted(styles.keys())}
 
 
+def _combined_subs(
+    workdir: Path,
+    styles_path: Path | None,
+    fonts_dir: Path | None,
+    preset: str | None,
+    position: str | None,
+) -> Path | None:
+    """One ASS carrying every built track, or None when there is only one.
+
+    Written to a temp file, NOT into the work directory: `mux` collects tracks
+    by globbing `subs.*.ass`, so a preview living there would be muxed in as a
+    bogus "preview" language. It is a view, not an artifact — nothing is
+    recorded as a stage and nothing downstream goes stale because of it.
+    """
+    from subtitle_studio.schema import load_transcript
+    from subtitle_studio.stages.style import combined_document
+    from subtitle_studio.subtitles.styleconf import load_styles, parse_position
+    from subtitle_studio.web.status import available_tracks
+
+    tracks = available_tracks(workdir)
+    if len(tracks) < 2:
+        return None
+
+    transcripts = []
+    for entry in tracks:
+        path = paths.transcript_path(workdir, entry["id"] or None)
+        try:
+            transcripts.append(load_transcript(path))
+        except Exception:
+            continue  # a half-written or older-schema track must not kill the preview
+    if len(transcripts) < 2:
+        return None
+
+    styles = load_styles(styles_path)
+    preset = preset or styles.default_preset
+    if position:
+        styles.default = styles.default.model_copy(update={"position": parse_position(position)})
+
+    document = combined_document(transcripts, styles, fonts_dir, preset)
+    PREVIEW_ASS.write_text(document, encoding="utf-8")
+    return PREVIEW_ASS
+
+
 def route_preview(handler: Handler, query: dict, body: dict) -> None:
     """One PNG, built through the same layout engine that builds the burned
     subtitles (Law 4, preview truth). With a transcript it is a real frame of
@@ -879,6 +953,10 @@ def route_preview(handler: Handler, query: dict, body: dict) -> None:
     position = (query.get("position") or "").strip() or None
     seg_id = _int(query.get("segment"))
     sample = _bool(query.get("sample"))
+    # Every built language at once, the way a video with all of them burned in
+    # would look. Defaults on: a page showing one track while the video will
+    # carry three is the misleading answer.
+    all_tracks = _bool(query.get("all") or "1")
     fonts_dir = studio.fonts_dir()
 
     with studio.preview_lock:
@@ -922,7 +1000,9 @@ def route_preview(handler: Handler, query: dict, body: dict) -> None:
                 if events:
                     at = (events[0].start + events[0].end) / 2
             used_segment = target.id if target else None
-            vf = f"ass={escape_filter_path(subs)}"
+
+            overlay = _combined_subs(workdir, styles_path, fonts_dir, preset, position) if all_tracks else None
+            vf = f"ass={escape_filter_path(overlay or subs)}"
             if fonts_dir:
                 vf += f":fontsdir={escape_filter_path(fonts_dir)}"
             result = subprocess.run(

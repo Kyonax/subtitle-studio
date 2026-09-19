@@ -36,6 +36,15 @@ def translated_transcripts(workdir: Path) -> list[Path]:
     return sorted(p for p in workdir.glob("transcript.*.json") if not p.name.endswith(".bak"))
 
 
+def combined_subs_path(workdir: Path) -> Path:
+    """Every language in one ASS, for the all-languages preview and burn.
+
+    Deliberately NOT named `subs.*.ass`: `mux` collects tracks with that glob
+    and would embed this as a bogus extra language.
+    """
+    return workdir / "combined.ass"
+
+
 def subs_path(workdir: Path, lang: str) -> Path:
     return workdir / f"subs.{lang}.ass"
 

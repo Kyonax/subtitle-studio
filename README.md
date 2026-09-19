@@ -109,13 +109,16 @@ uv run subtitle-studio render video.mp4 --lang swap
 ```
 
 `--position` takes one of the nine anchors (`bottom-center`, `bottom-left`,
-`center`, `top-right`, ...) or exact coordinates as `'x,y'`. Position is chosen
-here or in the TUI, it is never part of the styles file.
+`center`, `top-right`, ...) or exact coordinates as `'x,y'`, measured from the
+centre of the frame: `0,0` is the middle, +x runs right and +y runs down, so
+the same pair lands in the same relative spot at any resolution. Position is
+chosen here or in the TUI; the styles file only pins one per track
+(`[track.es.position]`) or per speaker.
 
 ### Full pipeline
 
 ```bash
-uv run subtitle-studio run video.mp4 --to en --preset shorts --position "1280,1000" --burn
+uv run subtitle-studio run video.mp4 --to en --preset shorts --position "320,460" --burn
 uv run subtitle-studio run video.mp4 --force diarize        # redo from a stage onward
 ```
 
@@ -396,7 +399,7 @@ color = "#FFD700"
 ### Worked example, short-form clip in Spanish
 
 ```bash
-uv run subtitle-studio run clip.mp4 --no-diarize --to es --preset shorts --position "960,540" --burn
+uv run subtitle-studio run clip.mp4 --no-diarize --to es --preset shorts --position "0,0" --burn
 ```
 
 One command: transcribe, translate everything into Spanish, big four-word

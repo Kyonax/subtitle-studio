@@ -187,7 +187,7 @@ def styles(
 @app.command()
 def preview(
     preset: Optional[str] = typer.Option(None, "--preset", help="named [style.NAME] preset to preview"),
-    position: Optional[str] = typer.Option(None, "--position", help="anchor or 'x,y'"),
+    position: Optional[str] = typer.Option(None, "--position", help="anchor or 'x,y' from the frame centre"),
     text: Optional[str] = typer.Option(None, "--text", help="sample text to render"),
     res: str = typer.Option("1920x1080", "--res", help="preview frame size WxH"),
     styles_file: Optional[Path] = typer.Option(None, "--styles", help="explicit styles.toml"),
@@ -241,7 +241,7 @@ def style(
     lang: Optional[str] = typer.Option(None, "--lang", help="translated variant to style (default: source)"),
     styles: Optional[Path] = typer.Option(None, "--styles", help="styles.toml (default: ./styles.toml)"),
     preset: Optional[str] = typer.Option(None, "--preset", help="named [style.NAME] preset from the styles.toml"),
-    position: Optional[str] = typer.Option(None, "--position", help="anchor (bottom-center, top-left, ...) or 'x,y'"),
+    position: Optional[str] = typer.Option(None, "--position", help="anchor (bottom-center, top-left, ...) or 'x,y' from the frame centre"),
     out: Optional[Path] = OutOpt,
 ) -> None:
     """Generate the styled ASS sidecar from transcript JSON + styles.toml."""
@@ -325,7 +325,7 @@ def run(
     swap: bool = typer.Option(False, "--swap", help="cross a two-language video (each part subtitled in the other language)"),
     styles: Optional[Path] = typer.Option(None, "--styles"),
     preset: Optional[str] = typer.Option(None, "--preset", help="named [style.NAME] preset from the styles.toml"),
-    position: Optional[str] = typer.Option(None, "--position", help="anchor (bottom-center, top-left, ...) or 'x,y'"),
+    position: Optional[str] = typer.Option(None, "--position", help="anchor (bottom-center, top-left, ...) or 'x,y' from the frame centre"),
     burn: bool = typer.Option(False, "--burn", help="also render the burn-in video"),
     force: Optional[str] = typer.Option(None, "--force", help="re-run from this stage onward"),
     no_diarize: bool = typer.Option(False, "--no-diarize", help="skip speaker identification"),

@@ -25,6 +25,7 @@ import UiSwitch from '@ui/switch.vue';
 
 import {
   burnTrack,
+  burnEveryLanguage,
   busy,
   delivery,
   deliver_state,
@@ -160,6 +161,21 @@ const file_name = (path) => (path ? path.split('/').slice(-1)[0] : '');
         </select>
       </UiField>
 
+      <div
+        v-if="subtitles.length > 1"
+        class="burn"
+      >
+        <UiButton
+          variant="primary"
+          :disabled="busy"
+          title="one mp4 with every language painted into the picture, exactly as the preview shows them"
+          @click="burnEveryLanguage"
+        >
+          burn all {{ subtitles.length }} languages into one mp4
+        </UiButton>
+        <span class="burn__note">highest quality (x264 crf 15), audio copied untouched</span>
+      </div>
+
       <div class="burn">
         <UiButton
           :disabled="busy || !burn_item"
@@ -232,6 +248,11 @@ const file_name = (path) => (path ? path.split('/').slice(-1)[0] : '');
     font-size: var(--fs-meta);
     color: var(--clr-neutral-300);
   }
+}
+
+.burn__note {
+  font-size: var(--fs-meta);
+  color: var(--clr-neutral-300);
 }
 
 .burn {

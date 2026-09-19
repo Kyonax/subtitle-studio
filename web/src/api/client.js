@@ -64,7 +64,7 @@ export const api = {
     body: { input, track },
   }),
 
-  styles:      (input, preset) => request(`/api/styles${query({ input, preset })}`),
+  styles:      (input, preset, track) => request(`/api/styles${query({ input, preset, track })}`),
   saveStyles:  (input, raw) => request('/api/styles', { method: 'PUT', body: { input, raw } }),
   setStyle:    (input, table, key, value) => request('/api/styles/set', {
     method: 'POST',

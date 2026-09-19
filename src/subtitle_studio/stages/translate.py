@@ -12,7 +12,12 @@ from typing import Callable
 
 from subtitle_studio import paths
 from subtitle_studio.config import Settings
-from subtitle_studio.schema import Transcript, load_transcript, save_transcript
+from subtitle_studio.schema import (
+    Transcript,
+    load_transcript,
+    save_transcript,
+    words_from_source_timing,
+)
 from subtitle_studio.state import hash_file, hash_obj, record_stage
 from subtitle_studio.translate import get_provider
 
@@ -111,10 +116,15 @@ def run_translate(
 
     def convert(seg):
         if seg.id in translated_texts:
+            text = translated_texts[seg.id]
             return seg.model_copy(
                 update={
-                    "text": translated_texts[seg.id], "language": targets[seg.id],
-                    "words": [], "source_text": seg.text,
+                    "text": text, "language": targets[seg.id],
+                    # Timings mapped onto the SOURCE word timeline: without them
+                    # layout can only split this segment proportionally, and the
+                    # translated line drifts off the voice the source line sits on.
+                    "words": words_from_source_timing(seg, text),
+                    "source_text": seg.text,
                 }
             )
         return seg.model_copy()  # already in the target language: keep words + text

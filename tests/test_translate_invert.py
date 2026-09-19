@@ -24,9 +24,16 @@ def test_invert_translates_only_foreign_segments(tmp_path, fake_provider):
     mixed_transcript(tmp_path)
     out = run_translate(tmp_path / "x.mkv", tmp_path, Settings(), "es")
     result = load_transcript(out)
-    # English segment translated, words dropped, source kept
+    # English segment translated, source kept
     assert result.segments[0].text == "[es] Hello everyone."
-    assert result.segments[0].words == [] and result.segments[0].source_text == "Hello everyone."
+    assert result.segments[0].source_text == "Hello everyone."
+    # Its words are re-timed from the SOURCE speech rather than dropped —
+    # without them layout could only split this segment proportionally, and the
+    # translated line would drift off the voice the source line sits on.
+    words = result.segments[0].words
+    assert " ".join(w.word for w in words) == "[es] Hello everyone."
+    assert words[0].start >= result.segments[0].start
+    assert words[-1].end <= result.segments[0].end + 1e-6
     # Spanish segment passed through with words intact
     assert result.segments[1].text == "Ahora hablo español."
     assert result.segments[1].words and result.segments[1].source_text is None

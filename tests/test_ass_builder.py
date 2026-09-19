@@ -49,10 +49,16 @@ def test_dialogue_lines_carry_speaker_names_and_escaped_braces():
     assert r"\{tardes\}" in dialogues[1]
 
 
-def test_explicit_xy_position_emits_pos_override():
-    styles = StylesConfig(default=StyleDef(position={"x": 640, "y": 650}))
+def test_explicit_xy_origin_is_the_frame_centre():
+    styles = StylesConfig(default=StyleDef(position={"x": 0, "y": 0}))
     doc = build_ass(make_transcript(), styles, None)
-    assert "{\\pos(640,650)}" in doc
+    assert "{\\pos(640,360)}" in doc  # 1280x720 transcript, so 0,0 is dead centre
+
+
+def test_explicit_xy_position_offsets_from_the_centre():
+    styles = StylesConfig(default=StyleDef(position={"x": 120, "y": -80}))
+    doc = build_ass(make_transcript(), styles, None)
+    assert "{\\pos(760,280)}" in doc  # right of centre, above it
 
 
 def test_background_disabled_uses_stroke_outline():
@@ -89,6 +95,6 @@ def test_central_styles_toml_is_the_full_reference():
         assert set(default[key]) == set(model.model_fields), key
     assert set(default["background"]["padding"]) == set(Padding.model_fields)
     assert raw["meta"]["play_res"] == "video"
-    # and the whole file validates into the model
-    config = load_styles("styles.toml")
-    assert config.default.size == 56 and config.default.background.enabled
+    # Values are the owner's look and may change. The law this test owns is
+    # the key set above; load_styles is the check that the file still parses.
+    load_styles("styles.toml")

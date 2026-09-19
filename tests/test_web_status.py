@@ -125,6 +125,33 @@ def test_styles_info_reaches_the_page(tmp_path, monkeypatch):
     assert "bottom-center" in info["anchors"]
 
 
+def test_styles_info_resolves_the_role_table_first(tmp_path, monkeypatch):
+    """The panel must show what `style` paints: [track.<role>] then
+    [track.<lang>]. The key it hands back stays the language, because that is
+    the table the page files an edit under."""
+    from subtitle_studio.schema import load_transcript
+    from subtitle_studio.web.status import styles_info
+
+    video, workdir = make_job(tmp_path)
+    variant = load_transcript(workdir / "transcript.json")
+    variant.language = "en"
+    variant.translated_from = "es"
+    save_transcript(variant, workdir / "transcript.en.json")
+    (tmp_path / "styles.toml").write_text(
+        '[track.source]\nsize = 60\n\n[track.translated]\nsize = 25\ncolor = "#f6f5f4"\n\n'
+        '[track.en]\nsize = 30\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(style_stage, "project_root", lambda: tmp_path)
+
+    source = styles_info(video, None, None)
+    translated = styles_info(video, None, "en")
+
+    assert (source["track"], source["effective"]["size"]) == ("es", 60)
+    assert (translated["track"], translated["effective"]["size"]) == ("en", 30)
+    assert translated["effective"]["color"] == "#f6f5f4"
+
+
 def test_subtitle_tracks_describe_every_language(tmp_path):
     """The rail iterates this: the source plus one entry per translated track,
     each carrying whether its text, its subtitles and its video are current."""

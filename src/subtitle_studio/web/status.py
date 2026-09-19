@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from subtitle_studio import paths
-from subtitle_studio.config import Settings
+from subtitle_studio.config import Settings, load_settings
 from subtitle_studio.schema import Transcript, load_transcript
 from subtitle_studio.state import hash_file, hash_obj, load_state, stage_fresh
 
@@ -92,6 +92,17 @@ def track_language(workdir: Path, track: str | None) -> str:
         return load_transcript(transcript_file).language or "und"
     except Exception:
         return "und"
+
+
+def track_role(workdir: Path, track: str | None) -> str:
+    """The [track.<role>] table a track resolves before its language one:
+    "translated" when its transcript was translated, else "source" -- the rule
+    `style` applies when it builds the subtitles."""
+    try:
+        transcript = load_transcript(paths.transcript_path(workdir, track or None))
+    except Exception:
+        return "translated" if track else "source"
+    return "translated" if transcript.translated_from else "source"
 
 
 def available_tracks(workdir: Path) -> list[dict]:
@@ -222,15 +233,29 @@ def _language_rows(transcript: Transcript) -> list[dict]:
     )
 
 
-def styles_info(input_media: Path | None, preset: str | None = None) -> dict:
-    from subtitle_studio.stages.style import resolve_styles_path
+def styles_info(
+    input_media: Path | None, preset: str | None = None, track: str | None = None
+) -> dict:
+    from subtitle_studio.stages.style import resolve_fonts_dir, resolve_styles_path
+    from subtitle_studio.subtitles.fonts import available_fonts
     from subtitle_studio.subtitles.styleconf import ANCHORS, load_styles
 
     resolved = resolve_styles_path(None, input_media)
     config = load_styles(resolved)
     active = preset or config.default_preset
+    # The language key is what [track.<lang>] is filed under, and what the page
+    # needs so an edit lands on the subtitle the owner is actually looking at.
+    # The effective style resolves the role table first, as `style` does, so
+    # the panel shows what the burn will paint.
+    if input_media and input_media.exists():
+        workdir = paths.studio_dir(input_media, None)
+        track_key = track_language(workdir, track)
+        resolve_key = (track_role(workdir, track), track_key)
+    else:
+        track_key = track or None
+        resolve_key = track_key
     try:
-        effective = config.base(active).model_dump()
+        effective = config.base(active, resolve_key).model_dump()
         error = None
     except ValueError as exc:  # unknown preset name
         effective = config.default.model_dump()
@@ -245,6 +270,9 @@ def styles_info(input_media: Path | None, preset: str | None = None) -> dict:
         "effective": effective,
         "default": config.default.model_dump(),
         "anchors": list(ANCHORS),
+        "fonts": available_fonts(resolve_fonts_dir(load_settings(None).paths.fonts_dir)),
+        "track": track_key,
+        "track_tables": config.track_names(),
         "error": error,
     }
 

@@ -13,6 +13,20 @@ from subtitle_studio.state import hash_file, hash_obj, record_stage
 
 ProgressFn = Callable[[str, float], None]
 
+# x264/x265 name their presets; NVENC uses p1..p7. A config carrying one
+# family's name must not be handed to the other -- ffmpeg rejects it outright.
+X26X_PRESETS = {
+    "ultrafast", "superfast", "veryfast", "faster", "fast",
+    "medium", "slow", "slower", "veryslow", "placebo",
+}
+DEFAULT_X26X_PRESET = "slow"
+
+
+def _preset_for(codec: str, preset: str) -> str:
+    if codec.endswith("_nvenc"):
+        return preset if preset.startswith("p") else "p5"
+    return preset if preset in X26X_PRESETS else DEFAULT_X26X_PRESET
+
 
 def escape_filter_path(path: str | Path) -> str:
     r"""Escape a path for use inside an ffmpeg filtergraph argument.
@@ -33,8 +47,15 @@ def run_render(
     lang: str,
     fonts_dir: Path | None = None,
     on_progress: ProgressFn | None = None,
+    subs: Path | None = None,
 ) -> Path:
-    subs = paths.subs_path(workdir, lang)
+    """Burn one subtitle document into the picture.
+
+    `subs` overrides which document is burned, which is how the all-languages
+    export works: it passes combined.ass, the same bytes the preview rendered,
+    so every language is painted in at once with its own [track.<lang>] look.
+    """
+    subs = subs or paths.subs_path(workdir, lang)
     if not subs.exists():
         raise FileNotFoundError(f"{subs} not found — run `subtitle-studio style` first")
     out = paths.render_path(workdir, lang)
@@ -48,8 +69,10 @@ def run_render(
         "ffmpeg", "-y", "-i", str(input_media),
         "-vf", vf,
         "-c:v", render.codec, "-pix_fmt", render.pix_fmt,
-        *(["-preset", render.preset, "-rc", "vbr", "-cq", str(render.cq), "-b:v", "0"]
-          if render.codec.endswith("_nvenc") else ["-crf", str(render.cq)]),
+        *(["-preset", _preset_for(render.codec, render.preset),
+           "-rc", "vbr", "-cq", str(render.cq), "-b:v", "0"]
+          if render.codec.endswith("_nvenc")
+          else ["-preset", _preset_for(render.codec, render.preset), "-crf", str(render.cq)]),
         "-c:a", "copy", "-movflags", "+faststart",
         "-progress", "pipe:1", "-nostats",
         str(out),

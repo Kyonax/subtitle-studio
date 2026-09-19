@@ -18,6 +18,36 @@ SAMPLE_TEXT = "Así se ven los subtítulos con este estilo, this is how your sub
 BACKDROP = "gradients=s={w}x{h}:c0=0x1A2432:c1=0x46586E:x0=0:y0=0:x1={w}:y1={h}:d=1"
 
 
+def merge_transcripts(transcripts: list[Transcript]) -> tuple[Transcript, dict[int, str]]:
+    """Every track's segments in ONE transcript -> (merged, track by segment id).
+
+    The map is what keeps each language's own look: build_ass takes it as
+    `track_of` and resolves `[track.<lang>]` per segment, so restyling the
+    Spanish subtitle moves nothing about the English one.
+
+    This is how a video carrying several burned-in languages actually behaves:
+    the events share a timespan and an alignment, so the builder's own overlap
+    stacking separates them into rows instead of printing one on top of the
+    other. Going through the real builder is what keeps the preview honest
+    (Law 4) — a preview that stacked them by its own arithmetic would be
+    showing a layout nothing else in the tool produces.
+
+    The first transcript is the base: its video info sets the play resolution
+    and its speaker table resolves the per-speaker styles. Ids are renumbered
+    because two tracks both start at 0, and equal-start events keep the track
+    order they were passed in (the sort in build_ass is stable).
+    """
+    base = transcripts[0]
+    segments = []
+    track_by_id: dict[int, str] = {}
+    for transcript in transcripts:
+        key = transcript.language or "und"
+        for segment in transcript.segments:
+            track_by_id[len(segments)] = key
+            segments.append(segment.model_copy(update={"id": len(segments)}))
+    return base.model_copy(update={"segments": segments}), track_by_id
+
+
 def render_style_preview(
     styles_path: Path | None,
     preset: str | None = None,

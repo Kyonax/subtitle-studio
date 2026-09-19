@@ -10,9 +10,9 @@ play_res = "video"
 
 [default]
 # Font family name or file stem inside fonts/, matched by family name.
-font = "Roboto"
+font = "SpaceMono Nerd Font Mono"
 # Letter height in pixels, 56 reads well on 1080p.
-size = 56
+size = 29
 # Letter fill color, white survives any footage.
 color = "#F9CD26"
 # Bold cut of the font.
@@ -21,6 +21,10 @@ bold = true
 italic = false
 # Force ALL CAPS, false keeps the text as transcribed.
 uppercase = false
+# Keep the full stop that ends a subtitle. false is subtitle house style —
+# the cut to the next card already says the sentence ended. "?", "!" and
+# "..." are never touched.
+end_period = false
 # Extra pixels between letters, 0.0 is the font's natural spacing.
 letter_spacing = 0.0
 # Width stretch in percent, 100 is undistorted.
@@ -28,14 +32,14 @@ scale_x = 100
 # Height stretch in percent, 100 is undistorted.
 scale_y = 100
 # Outline around each letter, dark keeps light text readable, width in pixels, enabled false removes it.
-stroke = { enabled = false, color = "#000000", width = 3.0 }
+stroke = { enabled = true, color = "#000000", width = 3.0 }
 # Blurred light halo under the text, radius is blur, size is reach past the stroke.
 glow = { enabled = false, color = "#00D5FF", radius = 6.0, size = 2.0 }
 # Drop shadow, offset in pixels down and right, off because the box already separates.
 shadow = { enabled = false, color = "#000000AA", offset = 2.0 }
 # Box behind the text, padding is inner space x and y, rounded draws a measured pill with radius corners.
 # mode applies when rounded is false, "box" is one box around the whole text, "opaque-per-line" boxes each line.
-background = { enabled = true, color = "#000000AA", padding = { x = 16, y = 10 }, rounded = false, radius = 16.0, mode = "box" }
+background = { enabled = false, color = "#000000AA", padding = { x = 16, y = 10 }, rounded = false, radius = 16.0, mode = "box" }
 # Distance to frame edges in pixels, vertical applies to the anchored edge.
 margin = { left = 80, right = 80, vertical = 60 }
 # Line length in characters before wrapping, 42 is the subtitle habit.
@@ -56,3 +60,15 @@ max_words = 46
 # Speaker override example. KEY is the stable id or the display name after a rename.
 # [speaker.SPEAKER_00]
 # color = "#7FD4FF"
+
+[track.es]
+size = 25
+color = "#f6f5f4"
+
+[track.es.position]
+x = 0
+y = 160
+
+[track.en.position]
+x = 0
+y = 136

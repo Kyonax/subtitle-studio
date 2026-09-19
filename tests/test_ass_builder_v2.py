@@ -51,7 +51,9 @@ def test_letter_spacing_scale_and_uppercase():
     fields = style_line.split(",")
     assert fields[11].strip() == "110"   # ScaleX
     assert fields[13].strip() == "1.5"   # Spacing
-    assert "HOLA A TODOS LOS PRESENTES." in doc
+    # end_period defaults to false, so the closing full stop is gone
+    assert "HOLA A TODOS LOS PRESENTES" in doc
+    assert "PRESENTES." not in doc
 
 
 def test_square_box_still_borderstyle_4():

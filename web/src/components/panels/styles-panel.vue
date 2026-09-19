@@ -18,6 +18,7 @@
 import { computed, ref, watch } from 'vue';
 
 import UiButton from '@ui/button.vue';
+import UiCombobox from '@ui/combobox.vue';
 import UiField from '@ui/field.vue';
 import UiGroup from '@ui/group.vue';
 import UiPanel from '@ui/panel.vue';
@@ -34,16 +35,63 @@ import {
 } from '@composables/use-studio';
 
 const mode = ref('form');
-const write_to_default = ref(false);
+/* Where an edit lands. Default is the selected language's own table, because a
+   video carrying two subtitles must be able to move, recolour or shrink one
+   without touching the other. */
+const scope = ref('track');
 const raw_draft = ref('');
 const raw_dirty = ref(false);
 const new_preset = ref('');
 const custom_position = ref('');
 
 const effective = computed(() => styles.value?.effective || {});
-const target_table = computed(() => (
-  options.preset && !write_to_default.value ? `style.${options.preset}` : 'default'
-));
+const track_key = computed(() => styles.value?.track || '');
+
+/* The chosen scope, degraded only when it is genuinely unavailable.
+   DERIVED, never assigned: the styles payload arrives one tick after mount, so
+   for that tick there is no track to write to. A watcher that "corrected" the
+   choice then would silently pin every later edit to [default] — which is
+   exactly the bug where restyling Spanish also restyled English. */
+const effective_scope = computed(() => {
+  if (scope.value === 'track' && !track_key.value) {
+    return 'default';
+  }
+  if (scope.value === 'preset' && !options.preset) {
+    return 'default';
+  }
+  return scope.value;
+});
+
+/* [default] <- [style.<preset>] <- [track.<lang>] <- [speaker.<key>].
+   Writing to the track table is last-but-one, so it always wins over the
+   shared look without erasing it for the other languages. */
+const target_table = computed(() => {
+  if (effective_scope.value === 'track') {
+    return `track.${track_key.value}`;
+  }
+  if (effective_scope.value === 'preset') {
+    return `style.${options.preset}`;
+  }
+  return 'default';
+});
+
+const scope_options = computed(() => {
+  const list = [];
+  if (track_key.value) {
+    list.push({ value: 'track', label: `only ${track_key.value}` });
+  }
+  if (options.preset) {
+    list.push({ value: 'preset', label: `preset ${options.preset}` });
+  }
+  list.push({ value: 'default', label: 'every language' });
+  return list;
+});
+
+/* A track table that does not exist yet is not an error — it is simply an
+   empty override, and the first edit creates it. */
+const track_has_overrides = computed(
+  () => (styles.value?.track_tables || []).includes(track_key.value),
+);
 
 watch(() => styles.value?.raw, (value) => {
   if (!raw_dirty.value) {
@@ -92,15 +140,59 @@ const cap_note = computed(() => {
 
 const positions = computed(() => styles.value?.anchors || []);
 
+/* Fonts bundled in fonts/ travel with the project; the rest are whatever
+   fontconfig serves on this machine. libass reads both, so both are offered,
+   and the tag says which is which — a bundled font is the one that survives
+   moving the project to another box. */
+const fonts = computed(() => (styles.value?.fonts || []).map((f) => ({
+  value: f.family,
+  label: f.family,
+  tag: f.source,
+})));
+
+const bundled_count = computed(() => fonts.value.filter((f) => f.tag === 'bundled').length);
+
+/* Position is scoped like every other property. It was the one thing kept out
+   of the file — chosen per run, one value for the whole page — which is why
+   moving one language used to move them all. A [track.<lang>] position sits
+   above the run-level one in the merge, so each language holds its own spot;
+   only "every language" still writes the run option, because [default] is the
+   documented reference and position deliberately has no entry there. */
+const scoped = computed(() => effective_scope.value !== 'default');
+
+const current_position = computed(() => {
+  const value = read('position');
+  if (scoped.value && value && typeof value === 'object') {
+    return `${value.x},${value.y}`;
+  }
+  if (scoped.value && typeof value === 'string' && value) {
+    return value;
+  }
+  return options.position;
+});
+
 const applyPosition = (value) => {
-  setOption('position', value);
+  if (!value) {
+    return;  // the "exact x,y" entry is a label, not a placement
+  }
+  if (scoped.value) {
+    write('position', value);
+  } else {
+    setOption('position', value);
+  }
   custom_position.value = '';
 };
 
 const applyCustomPosition = () => {
-  const value = custom_position.value.trim();
-  if (/^\d+\s*,\s*\d+$/.test(value)) {
-    setOption('position', value.replace(/\s+/g, ''));
+  const match = custom_position.value.trim().match(/^(-?\d+)\s*,\s*(-?\d+)$/);
+  if (!match) {
+    return;
+  }
+  const [, x, y] = match;
+  if (scoped.value) {
+    write('position', { x: Number(x), y: Number(y) });
+  } else {
+    setOption('position', `${x},${y}`);
   }
 };
 
@@ -168,7 +260,9 @@ const dropPreset = async () => {
       <UiGroup
         label="preset"
         columns="8rem"
-        :note="`writing to [${target_table}]`"
+        :note="target_table.startsWith('track.') && !track_has_overrides
+          ? `writing to [${target_table}] — this language has no overrides yet, the first edit creates them`
+          : `writing to [${target_table}]`"
       >
         <UiField
           label="use"
@@ -211,15 +305,23 @@ const dropPreset = async () => {
         </UiField>
 
         <UiField
-          v-if="options.preset"
-          row
-          label="edit [default]"
-          tip="send these edits to the base look instead of the preset"
+          label="these edits change"
+          tip="one language, a preset, or the look every language shares — an edit to a single language never moves the others"
+          span
         >
-          <UiSwitch
-            v-model="write_to_default"
-            label="write to default"
-          />
+          <select
+            :value="effective_scope"
+            :disabled="scope_options.length < 2"
+            @change="scope = $event.target.value"
+          >
+            <option
+              v-for="item in scope_options"
+              :key="item.value"
+              :value="item.value"
+            >
+              {{ item.label }}
+            </option>
+          </select>
         </UiField>
 
         <UiField
@@ -240,13 +342,15 @@ const dropPreset = async () => {
       <UiGroup label="text">
         <UiField
           label="font"
-          tip="family name, or the file stem of a font dropped into fonts/"
+          :tip="`type to search ${fonts.length} font(s) — ${bundled_count} bundled in fonts/, the rest installed on this machine`"
+          span
         >
-          <input
-            :value="read('font')"
-            type="text"
-            @change="write('font', $event.target.value)"
-          >
+          <UiCombobox
+            :model-value="read('font')"
+            :options="fonts"
+            placeholder="type to search fonts"
+            @update:model-value="write('font', $event)"
+          />
         </UiField>
         <UiField
           label="size"
@@ -513,10 +617,12 @@ const dropPreset = async () => {
       <UiGroup label="placement and wrapping">
         <UiField
           label="position"
-          tip="chosen per run, never stored in the file"
+          :tip="scoped
+            ? `stored on this subtitle only — the other languages keep their own spot`
+            : `chosen per run and shared by every language`"
         >
           <select
-            :value="positions.includes(options.position) ? options.position : ''"
+            :value="positions.includes(current_position) ? current_position : ''"
             @change="applyPosition($event.target.value)"
           >
             <option
@@ -533,12 +639,12 @@ const dropPreset = async () => {
         </UiField>
         <UiField
           label="exact x,y"
-          tip="pixels in the video's own coordinate space, overrides the anchor"
+          tip="pixels from the frame centre, negative goes left and up, overrides the anchor"
         >
           <input
             v-model="custom_position"
             type="text"
-            :placeholder="options.position.includes(',') ? options.position : '960,540'"
+            :placeholder="current_position.includes(',') ? current_position : '0,0'"
             @change="applyCustomPosition"
           >
         </UiField>

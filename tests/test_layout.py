@@ -125,3 +125,36 @@ def test_rebuilding_identical_subtitles_leaves_the_file_alone(tmp_path):
     time.sleep(0.01)
     run_style(video, workdir, styles_path=tmp_path / "missing.toml")
     assert first.stat().st_mtime > aged           # real change, real write
+
+
+def test_split_does_not_strand_a_single_word():
+    """Greedy filling to the cap pushes the remainder into the last subtitle,
+    which is how a sentence ends on one orphan word ("...web" / "developer").
+    The chunk count is unchanged; the words are just spread across it."""
+    text = "I'm from Colombia, and I've spent the last seven years as a full-stack web developer."
+    seg = Segment(id=0, start=0.0, end=8.0, text=text, words=[])
+
+    events = segment_events(seg, max_line_chars=40, max_lines=1)
+
+    assert len(events) == 3                       # same count a greedy fill needs
+    assert all(len(e.text) <= 40 for e in events)  # still inside the cap
+    assert min(len(e.text.split()) for e in events) > 1
+    # no chunk is a runt next to its neighbours
+    lengths = [len(e.text) for e in events]
+    assert max(lengths) - min(lengths) <= 10
+
+
+def test_balanced_split_keeps_word_timings():
+    """Balancing changes where chunks break, never what the clock says."""
+    words = [
+        Word(word=w, start=float(i), end=float(i) + 0.9)
+        for i, w in enumerate("alpha bravo charlie delta echo foxtrot golf hotel".split())
+    ]
+    seg = Segment(id=0, start=0.0, end=7.9, text=" ".join(w.word for w in words), words=words)
+
+    events = segment_events(seg, max_line_chars=20, max_lines=1)
+
+    assert events[0].start == 0.0
+    assert events[-1].end == 7.9
+    assert [e.start for e in events] == sorted(e.start for e in events)
+    assert " ".join(e.text for e in events).split() == [w.word for w in words]
